@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lektionsplanerare | Musikportalen</title><link rel="stylesheet" href="style.css"><style>
+.planner{max-width:950px;margin:2rem auto;padding:0 1rem}.planner .panel{margin:1rem 0}.planner label{display:block;font-weight:600;margin:.7rem 0 .3rem}.planner input:not([type=checkbox]),.planner select,.planner textarea{width:100%;padding:.75rem;border:1px solid #94a3b8;border-radius:8px;background:white;color:#0f172a;font:inherit;box-sizing:border-box}.planner textarea{min-height:95px}.planner .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}.planner .actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem}.planner .strategy{display:block;padding:.55rem;border-bottom:1px solid #ddd;font-weight:400}.planner .strategy input{margin-right:.6rem}.planner .saved{padding:.8rem;border:1px solid #cbd5e1;border-radius:8px;margin:.5rem 0}.planner .muted{color:#475569}.planner button{cursor:pointer}.planner .warning{background:#fef3c7;color:#713f12;padding:.8rem;border-radius:8px}</style></head>
+<body><header><div class="wrap top"><div class="brand">♫ Musikportalen <small>Digital lektionsplanerare</small></div><a href="index.html" style="color:white">Till musikövningarna</a></div></header>
+<main class="planner"><h1>Digital lektionsplanerare</h1><p>Planera, dokumentera och reflektera över undervisning med stöd av kognitionsvetenskap.</p><p class="warning">Demoversion utan inloggning. Planeringar sparas bara i denna webbläsare. Ange inga namn, personnummer eller andra identifierbara elevuppgifter.</p>
+<section class="panel"><h2>Planera lektion</h2><form id="lesson"><div class="grid"><div><label for="date">Datum</label><input id="date" type="date" required></div><div><label for="grade">Årskurs</label><select id="grade"><option value="3" >Åk 3</option><option value="4" >Åk 4</option><option value="5" >Åk 5</option><option value="6" >Åk 6</option><option value="7" >Åk 7</option><option value="8" selected>Åk 8</option><option value="9" >Åk 9</option></select></div><div><label for="subject">Ämne</label><input id="subject" value="Musik" required></div><div><label for="minutes">Minuter</label><input id="minutes" type="number" min="10" max="240" value="60" required></div></div>
+<label for="topic">Arbetsområde</label><input id="topic" value="Gitarr – ackord och samspel" required>
+<label for="goals">Lärandemål</label><textarea id="goals">Eleverna ska kunna växla mellan G, D, Am och C med bibehållen puls och delta i gemensamt musicerande.</textarea>
+<label for="steps">Lektionsmoment</label><textarea id="steps">1. Aktivera förkunskaper.
+2. Modellera G–D–Am och G–D–C.
+3. Öva ackordbyten med gemensam puls.
+4. Spela tillsammans.
+5. Avsluta med återkallning och självbedömning.</textarea>
+<h3>Kognitionsvetenskaplig koppling</h3><div id="strategies"></div>
+<label for="done">Vad genomfördes?</label><textarea id="done" placeholder="Dokumentera undervisningens genomförande utan personuppgifter."></textarea>
+<label for="reflection">Pedagogisk reflektion</label><textarea id="reflection" placeholder="Vad fungerade? Hur påverkade stöttning, repetition och samspel lärandet?"></textarea>
+<label for="next">Nästa steg</label><textarea id="next" placeholder="Vad behöver förändras eller repeteras?"></textarea>
+<div class="actions"><button type="submit">Spara planering</button><button type="button" id="clear" class="secondary">Ny planering</button><button type="button" id="export" class="secondary">Exportera som text</button></div></form><p id="message" role="status" aria-live="polite"></p></section>
+<section class="panel"><h2>Mina sparade planeringar</h2><div id="archive"></div></section></main>
+<footer class="wrap">Musikportalen · Lokal demoversion · Ingen serverlagring</footer><script src="lektionsplanerare.js" defer></script></body></html>
