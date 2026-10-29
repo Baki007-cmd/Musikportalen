@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isApprovedTeacher(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/teachers/$(uid))
+        && get(/databases/$(database)/documents/teachers/$(uid)).data.active == true;
+    }
+    match /teachers/{uid} {
+      // Behörighetsdokument skapas och ändras enbart via privilegierad administration.
+      allow read: if isApprovedTeacher(uid);
+      allow write: if false;
+      match /lessons/{lessonId} {
+        allow read, delete: if isApprovedTeacher(uid);
+        allow create, update: if isApprovedTeacher(uid)
+          && request.resource.data.keys().hasOnly(['title','date','grade','goals','steps','theory','reflection'])
+          && request.resource.data.keys().hasAll(['title','date','grade','goals','steps','theory','reflection'])
+          && request.resource.data.title is string
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.date is string
+          && request.resource.data.date.size() <= 10
+          && request.resource.data.grade in ['3','4','5','6','7','8','9']
+          && request.resource.data.goals is string
+          && request.resource.data.goals.size() <= 5000
+          && request.resource.data.steps is string
+          && request.resource.data.steps.size() <= 10000
+          && request.resource.data.theory is string
+          && request.resource.data.theory.size() <= 5000
+          && request.resource.data.reflection is string
+          && request.resource.data.reflection.size() <= 10000;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
