@@ -1,0 +1,15 @@
+"use strict";
+const topics={3:"Sång, puls och enkla rytmer",4:"Sång, rytmer och musikaliska begrepp",5:"Slagverk och samspel",6:"Rytm, ensemble och musikaliska uttryck",7:"Folk- och världsmusik",8:"Gitarr och ensemblespel",9:"Klassisk musik och musikhistoria"};
+const years=document.querySelector("#years");
+Object.entries(topics).forEach(([year,topic])=>{const b=document.createElement("button");b.textContent="Åk "+year;b.addEventListener("click",()=>{document.querySelector("#year-info").textContent="Årskurs "+year+": "+topic+" (fler övningar kommer).";years.querySelectorAll("button").forEach(x=>x.classList.remove("selected"));b.classList.add("selected")});years.append(b)});
+document.querySelector("#login").addEventListener("click",()=>alert("Google Workspace-inloggning aktiveras först efter att skolans IT-ansvariga godkänt lösningen."));
+let end="Am",index=-1,timer=null,audio=null;const beats=document.querySelector("#beats"),play=document.querySelector("#play");
+function sequence(){return ["G","G","D","D",end,end,end,end]}
+function draw(){beats.replaceChildren();sequence().forEach((ch,i)=>{const d=document.createElement("div");d.className="beat"+(i===index?" active":"");d.textContent=ch;const n=document.createElement("small");n.textContent="Slag "+(i+1);d.append(n);beats.append(d)})}
+function tick(){index=(index+1)%8;draw();if(!audio) return;const oscillator=audio.createOscillator(),gain=audio.createGain(),now=audio.currentTime;oscillator.frequency.value=index===0?850:550;gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.14,now+.005);gain.gain.exponentialRampToValueAtTime(.0001,now+.09);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(now);oscillator.stop(now+.1)}
+function stop(){if(timer!==null)clearInterval(timer);timer=null;play.textContent="Starta pulsen"}
+function start(){stop();if(!audio){const C=window.AudioContext||window.webkitAudioContext;if(C)audio=new C()}if(audio&&audio.state==="suspended")audio.resume();tick();timer=setInterval(tick,60000/Number(document.querySelector("#bpm").value));play.textContent="Stoppa pulsen"}
+play.addEventListener("click",()=>timer===null?start():stop());document.querySelector("#reset").addEventListener("click",()=>{stop();index=-1;draw()});
+for(const [id,ch] of [["seq1","Am"],["seq2","C"]])document.querySelector("#"+id).addEventListener("click",()=>{end=ch;index=-1;draw();document.querySelector("#seq1").classList.toggle("selected",end==="Am");document.querySelector("#seq2").classList.toggle("selected",end==="C")});
+document.querySelector("#bpm").addEventListener("input",e=>{document.querySelector("#bpm-display").textContent=e.target.value;if(timer!==null)start()});
+document.querySelector("#check").addEventListener("click",()=>{const selected=document.querySelector('input[name="quiz"]:checked');document.querySelector("#feedback").textContent=!selected?"Välj ett svar först.":selected.value==="b"?"Rätt! Puls är musikens regelbundna grundslag.":"Försök igen! Tänk på det regelbundna slag som håller ihop musiken."});draw();
