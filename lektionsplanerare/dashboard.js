@@ -1,0 +1,17 @@
+"use strict";
+const KEY="musikportalen-oversikt-v1",days=["Söndag","Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag"],$=id=>document.getElementById(id);
+const today=new Date(),date=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+function weekOf(value){const x=new Date(value+"T12:00:00");x.setDate(x.getDate()+4-(x.getDay()||7));const y=x.getFullYear(),first=new Date(y,0,1,12),w=Math.ceil((((x-first)/86400000)+1)/7);return y+"-W"+String(w).padStart(2,"0")}
+function el(tag,value,cls){const x=document.createElement(tag);x.textContent=String(value??"");if(cls)x.className=cls;return x}
+function entry(target,title,subtitle,detail){const d=el("div","","entry");d.append(el("strong",title),el("div",subtitle,"meta"));if(detail)d.append(el("div",detail));target.append(d)}
+function render(){let data={blocks:[],areas:[],events:[]};try{const parsed=JSON.parse(localStorage.getItem(KEY)||"null");if(parsed&&["blocks","areas","events"].every(k=>Array.isArray(parsed[k])))data=parsed}catch(e){$("sync").textContent="Kunde inte läsa sparade data."}
+$("today").textContent=days[today.getDay()]+" "+today.toLocaleDateString("sv-SE",{day:"numeric",month:"long",year:"numeric"});
+const w=weekOf(date),dow=today.getDay(),blocks=data.blocks.filter(x=>x&&typeof x==="object"),todays=blocks.filter(x=>Number(x.day)===dow&&(x.recurring||x.week===w)).sort((a,b)=>String(a.start).localeCompare(String(b.start))),weekly=blocks.filter(x=>x.recurring||x.week===w).sort((a,b)=>Number(a.day)-Number(b.day)||String(a.start).localeCompare(String(b.start))),areas=data.areas.filter(x=>x&&x.start<=date&&x.end>=date),events=data.events.filter(x=>x&&x.date>=date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+for(const [id,count] of [["today-count",todays.length],["week-count",weekly.length],["area-count",areas.length],["event-count",events.length]])$(id).textContent=count;
+for(const id of ["today-lessons","week-lessons","current-areas","upcoming-events"])$(id).replaceChildren();
+if(!todays.length)$("today-lessons").append(el("p","Inga lektioner inlagda för idag.","empty"));for(const x of todays)entry($("today-lessons"),(x.start||"")+"–"+(x.end||"")+" · "+(x.klass||""),(x.subject||""),x.content||"");
+if(!weekly.length)$("week-lessons").append(el("p","Inga lektioner inlagda denna vecka.","empty"));for(const x of weekly.slice(0,12))entry($("week-lessons"),(days[Number(x.day)]||"")+" "+(x.start||"")+" · "+(x.klass||""),x.subject||"",x.content||"");if(weekly.length>12)$("week-lessons").append(el("p","Visa resterande lektioner i planeringsöversikten.","meta"));
+if(!areas.length)$("current-areas").append(el("p","Inga aktiva arbetsområden just nu.","empty"));for(const x of areas)entry($("current-areas"),x.name||"Arbetsområde",(x.klass||"")+" · "+(x.start||"")+"–"+(x.end||""),x.notes||"");
+if(!events.length)$("upcoming-events").append(el("p","Inga kommande aktiviteter inlagda.","empty"));for(const x of events.slice(0,8))entry($("upcoming-events"),x.title||"Aktivitet",(x.date||"")+" · "+(x.type||""),"");
+$("sync").textContent="Uppgifterna uppdateras från planeringsöversikten på samma enhet och webbadress. Öppna sidan igen för att se nya ändringar."}
+render();window.addEventListener("storage",e=>{if(e.key===KEY)render()});
