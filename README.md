@@ -1,4 +1,4 @@
-# Musikportalen – åk 3–9
+# Musikportalen 
 
 En första prototyp för musikundervisning i årskurs 3–9, med svenska instruktioner och övningar för gitarr, rytm och musikteori.
 
