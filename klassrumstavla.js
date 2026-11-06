@@ -27,7 +27,7 @@ const endingEditor=endingTile.querySelector(".rich-editor");
 endingEditor.id="ending";endingEditor.dataset.placeholder="Sammanfatta lektionen och reflektera";
 document.querySelector('[data-tile="activities"]').after(endingTile);
 const endingStyle=document.createElement("style");
-endingStyle.textContent='#tiles [data-tile="ending"]{min-height:350px}#tiles [data-tile="ending"] h2{font-size:clamp(1.3rem,2vw,1.9rem)}';
+endingStyle.textContent='#tiles [data-tile="ending"]{min-height:165px;height:175px}#tiles [data-tile="ending"] .rich-editor{min-height:55px}#tiles [data-tile="ending"] h2{font-size:clamp(1.3rem,2vw,1.9rem)}';
 document.head.append(endingStyle);
 try{const saved=JSON.parse(localStorage.getItem(key)||"{}");setEditor("goals",saved.goalsHtml,saved.goals);setEditor("instructions",saved.instructionsHtml,saved.instructions);setEditor("ending",saved.endingHtml,saved.ending);if(saved.light)chooseLight(saved.light);}catch{}
 for(const id of ["goals","instructions","ending"]){$(id).addEventListener("input",persist);$(id).addEventListener("paste",e=>{e.preventDefault();document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));});}
@@ -109,10 +109,10 @@ function getTilePositions(){
 function applyTilePositions(saved){
  tileEls.forEach((tile,i)=>{
   const p=saved?.[tile.dataset.tile]||{};
-  const defaultWidth=["goals","activities","ending"].includes(tile.dataset.tile)?47:tile.dataset.tile==="clock"?46:30;
+  const defaultWidth=tile.dataset.tile==="ending"?96:["goals","activities"].includes(tile.dataset.tile)?47:30;
   const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):defaultWidth;
   tile.style.width=clamp(width,18,100)+"%";
-  tile.style.height="";
+  tile.style.height=tile.dataset.tile==="ending"&&!p.h?"175px":"";
   if(Number.isFinite(Number(p.h))&&Number(p.h)>0)tile.style.height=clamp(Number(p.h),135,1200)+"px";
   const x=Number.isFinite(Number(p.x))?Number(p.x):defaultPositions[i][0];
   const y=Number.isFinite(Number(p.y))?Number(p.y):defaultPositions[i][1];
