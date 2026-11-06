@@ -109,7 +109,7 @@ function setVisibleExtras(ids){
  const selected=Array.isArray(ids)?ids:[];
  for(const id of extraIds)tiles.querySelector('[data-tile="'+id+'"]').hidden=!selected.includes(id);
  try{localStorage.setItem(extrasKey,JSON.stringify(getVisibleExtras()));}catch{}
- $("extraTiles").value="";
+ document.querySelectorAll(".extra-toggle").forEach(button=>button.setAttribute("aria-pressed",String(selected.includes(button.dataset.extra))));
  $("hideExtras").hidden=getVisibleExtras().length===0;
 }
 $("extraTiles").addEventListener("change",e=>{
