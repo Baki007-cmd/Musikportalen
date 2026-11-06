@@ -34,7 +34,7 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrum
 
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
-const defaultPositions=[[1,1],[1,60],[1,17],[51,17],[35,60],[68,60]];
+const defaultPositions=[[2,2],[2,64],[2,23],[51,23],[35,64],[68,64]];
 function clamp(n,min,max){return Math.min(max,Math.max(min,n));}
 function getTilePositions(){
  const result={};
@@ -52,6 +52,7 @@ function applyTilePositions(saved){
   const defaultWidth=["goals","activities"].includes(tile.dataset.tile)?47:tile.dataset.tile==="clock"?46:30;
   const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):defaultWidth;
   tile.style.width=clamp(width,18,100)+"%";
+  tile.style.height="";
   if(Number.isFinite(Number(p.h))&&Number(p.h)>0)tile.style.height=clamp(Number(p.h),135,1200)+"px";
   const x=Number.isFinite(Number(p.x))?Number(p.x):defaultPositions[i][0];
   const y=Number.isFinite(Number(p.y))?Number(p.y):defaultPositions[i][1];
@@ -61,7 +62,7 @@ function applyTilePositions(saved){
 }
 function persistPositions(){try{localStorage.setItem(positionsKey,JSON.stringify(getTilePositions()));}catch{}}
 let initialPositions={};try{initialPositions=JSON.parse(localStorage.getItem(positionsKey)||"{}");}catch{}
-applyTilePositions(initialPositions);
+applyTilePositions({});
 let gesture=null;
 tileEls.forEach(tile=>{
  for(const [selector,kind] of [[".move-handle","move"],[".resize-handle","resize"]]){
@@ -112,10 +113,7 @@ function setVisibleExtras(ids){
  document.querySelectorAll(".extra-toggle").forEach(button=>button.setAttribute("aria-pressed",String(selected.includes(button.dataset.extra))));
  $("hideExtras").hidden=getVisibleExtras().length===0;
 }
-$("extraTiles").addEventListener("change",e=>{
- const id=e.target.value;
- if(id)setVisibleExtras([...new Set([...getVisibleExtras(),id])]);
-});
+document.querySelectorAll(".extra-toggle").forEach(button=>button.addEventListener("click",()=>{const id=button.dataset.extra;const visible=getVisibleExtras();setVisibleExtras(visible.includes(id)?visible.filter(x=>x!==id):[...visible,id]);}));
 $("hideExtras").addEventListener("click",()=>setVisibleExtras([]));
 // Extra verktyg är dolda när tavlan öppnas. De väljs via knapparna i toppmenyn.
 setVisibleExtras([]);
