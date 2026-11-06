@@ -17,13 +17,13 @@ function tick(){beat++;$("beat").textContent=beat%4===1?"♩ 1":"♩ "+((beat-1)
 $("metro").onclick=()=>{if(metro!==null){stopMetro();return;}const C=window.AudioContext||window.webkitAudioContext;if(C){audio ||= new C();audio.resume();}const bpm=Math.max(40,Math.min(220,Number($("bpm").value)||80));$("bpm").value=bpm;beat=0;tick();metro=setInterval(tick,60000/bpm);$("metro").textContent="Stoppa metronom";};
 $("bpm").onchange=()=>{if(metro!==null){stopMetro();$("metro").click();}};
 $("fullscreen").onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $("board").requestFullscreen?.();};
-$("reset").onclick=()=>{if(!confirm("Nollställ anteckningar, timer och arbetsro?"))return;stopTimer();stopMetro();$("goals").value="";$("instructions").value="";$("minutes").value=10;setMinutes();chooseLight("green");persist();};
+$("reset").onclick=()=>{if(!confirm("Nollställ anteckningar, timer och arbetsro?"))return;stopTimer();stopMetro();$("goals").value="";$("instructions").value="";resizeTextAreas();$("minutes").value=10;setMinutes();chooseLight("green");persist();};
 display();
 
 let cloudClient=null,cloudUser=null,openedBoardId=null;
 function boardStatus(s){$("boardStatus").textContent=s;}
-function boardSnapshot(){return {background:$("background").value,goals:$("goals").value,instructions:$("instructions").value,light:document.querySelector(".light.active")?.dataset.light||"green",minutes:Number($("minutes").value)||10,remaining,bpm:Number($("bpm").value)||80,tilePositions:getTilePositions()};}
-function restoreBoard(data){stopTimer();stopMetro();setBackground(data.background||"blue");$("goals").value=data.goals||"";$("instructions").value=data.instructions||"";chooseLight(["red","yellow","green"].includes(data.light)?data.light:"green");$("minutes").value=Math.max(1,Math.min(180,Number(data.minutes)||10));remaining=Math.max(0,Math.min(10800,Number(data.remaining)??600));$("bpm").value=Math.max(40,Math.min(220,Number(data.bpm)||80));display();persist();applyTilePositions(data.tilePositions||{});persistPositions();}
+function boardSnapshot(){return {background:$("background").value,goals:$("goals").value,instructions:$("instructions").value,light:document.querySelector(".light.active")?.dataset.light||"green",minutes:Number($("minutes").value)||10,remaining,bpm:Number($("bpm").value)||80,tilePositions:getTilePositions(),visibleExtras:getVisibleExtras()};}
+function restoreBoard(data){stopTimer();stopMetro();setBackground(data.background||"blue");$("goals").value=data.goals||"";$("instructions").value=data.instructions||"";chooseLight(["red","yellow","green"].includes(data.light)?data.light:"green");$("minutes").value=Math.max(1,Math.min(180,Number(data.minutes)||10));remaining=Math.max(0,Math.min(10800,Number.isFinite(Number(data.remaining))?Number(data.remaining):600));$("bpm").value=Math.max(40,Math.min(220,Number(data.bpm)||80));display();persist();applyTilePositions(data.tilePositions||{});persistPositions();setVisibleExtras(data.visibleExtras||[]);resizeTextAreas();}
 async function listBoards(){const {data,error}=await cloudClient.from("classroom_boards").select("id,title,content,updated_at").eq("owner_id",cloudUser.id).order("updated_at",{ascending:false});if(error)throw error;const root=$("savedBoards");root.replaceChildren();if(!data?.length)root.textContent="Inga sparade tavlor ännu.";for(const item of data||[]){const open=document.createElement("button");open.textContent="Öppna: "+item.title;open.onclick=()=>{openedBoardId=item.id;$("boardName").value=item.title;restoreBoard(item.content||{});boardStatus("Tavlan öppnad. Välj Spara för att uppdatera den.");};const remove=document.createElement("button");remove.className="secondary";remove.textContent="Ta bort";remove.onclick=async()=>{if(!confirm("Ta bort den sparade klassrumstavlan?"))return;const {error}=await cloudClient.from("classroom_boards").delete().eq("id",item.id).eq("owner_id",cloudUser.id);if(error){boardStatus(error.message);return;}if(openedBoardId===item.id)openedBoardId=null;await listBoards();boardStatus("Tavlan togs bort.");};root.append(open,remove);}}
 $("saveBoard").onclick=async()=>{if(!cloudUser){boardStatus("Logga in för att spara.");return;}const btn=$("saveBoard");btn.disabled=true;try{const row={owner_id:cloudUser.id,title:$("boardName").value.trim()||"Min klassrumstavla",content:boardSnapshot()};const query=openedBoardId?cloudClient.from("classroom_boards").update(row).eq("id",openedBoardId).eq("owner_id",cloudUser.id).select("id").single():cloudClient.from("classroom_boards").insert(row).select("id").single();const {data,error}=await query;if(error)throw error;openedBoardId=data.id;await listBoards();boardStatus("Klassrumstavlan sparades i Supabase.");}catch(e){boardStatus("Kunde inte spara: "+e.message+". Kontrollera att classroom_boards-tabellen finns.");}finally{btn.disabled=false;}};
 $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrumstavla";restoreBoard({background:"blue",goals:"",instructions:"",light:"green",minutes:10,remaining:600,bpm:80});boardStatus("Ny tavla. Spara när du vill behålla den.");};
@@ -34,7 +34,7 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrum
 
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
-const defaultPositions=[[1,1],[34,1],[67,1],[1,38],[34,38],[67,38]];
+const defaultPositions=[[1,1],[1,60],[1,17],[51,17],[35,60],[68,60]];
 function clamp(n,min,max){return Math.min(max,Math.max(min,n));}
 function getTilePositions(){
  const result={};
@@ -49,7 +49,8 @@ function getTilePositions(){
 function applyTilePositions(saved){
  tileEls.forEach((tile,i)=>{
   const p=saved?.[tile.dataset.tile]||{};
-  const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):33.333-18/Math.max(tiles.clientWidth,1)*100;
+  const defaultWidth=["goals","activities"].includes(tile.dataset.tile)?47:tile.dataset.tile==="clock"?46:30;
+  const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):defaultWidth;
   tile.style.width=clamp(width,18,100)+"%";
   if(Number.isFinite(Number(p.h))&&Number(p.h)>0)tile.style.height=clamp(Number(p.h),135,1200)+"px";
   const x=Number.isFinite(Number(p.x))?Number(p.x):defaultPositions[i][0];
@@ -100,3 +101,31 @@ function setEditMode(enabled){
 }
 $("editMode").addEventListener("click",()=>setEditMode(!document.body.classList.contains("editing")));
 setEditMode(false);
+
+const extraIds=["timer","quiet","metronome"];
+const extrasKey="musikportalen-visible-extras";
+function getVisibleExtras(){return extraIds.filter(id=>!tiles.querySelector('[data-tile="'+id+'"]').hidden);}
+function setVisibleExtras(ids){
+ const selected=Array.isArray(ids)?ids:[];
+ for(const id of extraIds)tiles.querySelector('[data-tile="'+id+'"]').hidden=!selected.includes(id);
+ try{localStorage.setItem(extrasKey,JSON.stringify(getVisibleExtras()));}catch{}
+ $("extraTiles").value="";
+ $("hideExtras").hidden=getVisibleExtras().length===0;
+}
+$("extraTiles").addEventListener("change",e=>{
+ const id=e.target.value;
+ if(id)setVisibleExtras([...new Set([...getVisibleExtras(),id])]);
+});
+$("hideExtras").addEventListener("click",()=>setVisibleExtras([]));
+let savedExtras=[];
+try{savedExtras=JSON.parse(localStorage.getItem(extrasKey)||"[]");}catch{}
+setVisibleExtras(savedExtras);
+function resizeTextAreas(){
+ for(const id of ["goals","instructions"]){
+  const el=$(id);
+  el.style.height="auto";
+  el.style.height=Math.max(260,el.scrollHeight+4)+"px";
+ }
+}
+for(const id of ["goals","instructions"])$(id).addEventListener("input",resizeTextAreas);
+resizeTextAreas();
