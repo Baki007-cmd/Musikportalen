@@ -31,51 +31,66 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrum
 
 
 
+
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
 const defaultPositions=[[1,1],[34,1],[67,1],[1,38],[34,38],[67,38]];
 function clamp(n,min,max){return Math.min(max,Math.max(min,n));}
-function getTilePositions(){const width=tiles.clientWidth,height=tiles.clientHeight;const result={};for(const tile of tileEls){result[tile.dataset.tile]={x:+((tile.offsetLeft/width)*100).toFixed(3),y:+((tile.offsetTop/height)*100).toFixed(3)};}return result;}
+function getTilePositions(){
+ const result={};
+ for(const tile of tileEls)result[tile.dataset.tile]={
+  x:+(tile.offsetLeft/tiles.clientWidth*100).toFixed(3),
+  y:+(tile.offsetTop/tiles.clientHeight*100).toFixed(3),
+  w:+(tile.offsetWidth/tiles.clientWidth*100).toFixed(3),
+  h:tile.offsetHeight
+ };
+ return result;
+}
 function applyTilePositions(saved){
- const width=tiles.clientWidth,height=tiles.clientHeight;
  tileEls.forEach((tile,i)=>{
-  const p=saved?.[tile.dataset.tile]||{x:defaultPositions[i][0],y:defaultPositions[i][1]};
-  const x=clamp(Number(p.x)||0,0,Math.max(0,100-tile.offsetWidth/width*100));
-  const y=clamp(Number(p.y)||0,0,Math.max(0,100-tile.offsetHeight/height*100));
-  tile.style.left=x+"%";tile.style.top=y+"%";
+  const p=saved?.[tile.dataset.tile]||{};
+  const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):33.333-18/Math.max(tiles.clientWidth,1)*100;
+  tile.style.width=clamp(width,18,100)+"%";
+  if(Number.isFinite(Number(p.h))&&Number(p.h)>0)tile.style.height=clamp(Number(p.h),135,1200)+"px";
+  const x=Number.isFinite(Number(p.x))?Number(p.x):defaultPositions[i][0];
+  const y=Number.isFinite(Number(p.y))?Number(p.y):defaultPositions[i][1];
+  tile.style.left=clamp(x,0,Math.max(0,100-tile.offsetWidth/tiles.clientWidth*100))+"%";
+  tile.style.top=clamp(y,0,Math.max(0,100-tile.offsetHeight/tiles.clientHeight*100))+"%";
  });
 }
 function persistPositions(){try{localStorage.setItem(positionsKey,JSON.stringify(getTilePositions()));}catch{}}
 let initialPositions={};try{initialPositions=JSON.parse(localStorage.getItem(positionsKey)||"{}");}catch{}
 applyTilePositions(initialPositions);
-let drag=null;
+let gesture=null;
 tileEls.forEach(tile=>{
- const handle=tile.querySelector(".move-handle");
- handle.addEventListener("pointerdown",e=>{
-  if(!document.body.classList.contains("editing"))return;
-  if(e.pointerType==="mouse"&&e.button!==0)return;
-  e.preventDefault();
-  const rect=tiles.getBoundingClientRect();
-  drag={tile,id:e.pointerId,startX:e.clientX,startY:e.clientY,left:tile.offsetLeft,top:tile.offsetTop};
-  tile.classList.add("moving");
-  handle.setPointerCapture(e.pointerId);
- });
- handle.addEventListener("pointermove",e=>{
-  if(!drag||drag.tile!==tile||drag.id!==e.pointerId)return;
-  const maxX=Math.max(0,tiles.clientWidth-tile.offsetWidth);
-  const maxY=Math.max(0,tiles.clientHeight-tile.offsetHeight);
-  tile.style.left=(clamp(drag.left+e.clientX-drag.startX,0,maxX)/tiles.clientWidth*100)+"%";
-  tile.style.top=(clamp(drag.top+e.clientY-drag.startY,0,maxY)/tiles.clientHeight*100)+"%";
- });
- const finish=e=>{
-  if(!drag||drag.tile!==tile)return;
-  tile.classList.remove("moving");drag=null;persistPositions();
- };
- handle.addEventListener("pointerup",finish);
- handle.addEventListener("pointercancel",finish);
+ for(const [selector,kind] of [[".move-handle","move"],[".resize-handle","resize"]]){
+  const handle=tile.querySelector(selector);
+  if(!handle)continue;
+  handle.addEventListener("pointerdown",e=>{
+   if(!document.body.classList.contains("editing")||(e.pointerType==="mouse"&&e.button!==0))return;
+   e.preventDefault();
+   gesture={tile,kind,id:e.pointerId,x:e.clientX,y:e.clientY,left:tile.offsetLeft,top:tile.offsetTop,width:tile.offsetWidth,height:tile.offsetHeight};
+   tile.classList.add("moving");
+   handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener("pointermove",e=>{
+   if(!gesture||gesture.tile!==tile||gesture.id!==e.pointerId)return;
+   const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+   if(gesture.kind==="move"){
+    tile.style.left=clamp(gesture.left+dx,0,Math.max(0,tiles.clientWidth-tile.offsetWidth))/tiles.clientWidth*100+"%";
+    tile.style.top=clamp(gesture.top+dy,0,Math.max(0,tiles.clientHeight-tile.offsetHeight))/tiles.clientHeight*100+"%";
+   }else{
+    tile.style.width=clamp(gesture.width+dx,220,tiles.clientWidth-gesture.left)/tiles.clientWidth*100+"%";
+    tile.style.height=clamp(gesture.height+dy,135,Math.max(135,tiles.clientHeight-gesture.top))+"px";
+   }
+  });
+  const finish=e=>{if(!gesture||gesture.tile!==tile||gesture.id!==e.pointerId)return;tile.classList.remove("moving");gesture=null;persistPositions();};
+  handle.addEventListener("pointerup",finish);
+  handle.addEventListener("pointercancel",finish);
+  handle.addEventListener("lostpointercapture",()=>{if(gesture?.tile===tile){tile.classList.remove("moving");gesture=null;persistPositions();}});
+ }
 });
-window.addEventListener("resize",()=>applyTilePositions(getTilePositions()));
-
+window.addEventListener("resize",()=>{const positions=getTilePositions();applyTilePositions(positions);});
 function setEditMode(enabled){
  document.body.classList.toggle("editing",enabled);
  $("editMode").textContent=enabled?"Klar – visa tavlan":"Redigera tavlan";
