@@ -35,7 +35,7 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrum
 
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
-const defaultPositions=[[2,2],[2,64],[2,23],[51,23],[35,64],[68,64]];
+const defaultPositions=[[2,67],[2,64],[2,2],[51,2],[35,64],[68,64]];
 function clamp(n,min,max){return Math.min(max,Math.max(min,n));}
 function getTilePositions(){
  const result={};
