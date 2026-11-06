@@ -28,6 +28,7 @@ endingEditor.id="ending";endingEditor.dataset.placeholder="Sammanfatta lektionen
 document.querySelector('[data-tile="activities"]').after(endingTile);
 const endingStyle=document.createElement("style");
 endingStyle.textContent='#tiles [data-tile="ending"]{min-height:165px;height:175px}#tiles [data-tile="ending"] .rich-editor{min-height:55px}#tiles [data-tile="ending"] h2{font-size:clamp(1.3rem,2vw,1.9rem)}';
+endingStyle.textContent+='#tiles [data-tile="ending"]{display:grid;grid-template-columns:auto 1fr;align-content:start;column-gap:14px}#tiles [data-tile="ending"] h2{grid-column:1;grid-row:1;align-self:center;margin:0}#tiles [data-tile="ending"] .format-bar{grid-column:2;grid-row:1;align-self:center;margin:0}#tiles [data-tile="ending"] .rich-editor{grid-column:1/-1;grid-row:2}#tiles [data-tile="ending"] .move-handle,#tiles [data-tile="ending"] .resize-handle{grid-column:1/-1}';
 document.head.append(endingStyle);
 try{const saved=JSON.parse(localStorage.getItem(key)||"{}");setEditor("goals",saved.goalsHtml,saved.goals);setEditor("instructions",saved.instructionsHtml,saved.instructions);setEditor("ending",saved.endingHtml,saved.ending);if(saved.light)chooseLight(saved.light);}catch{}
 for(const id of ["goals","instructions","ending"]){$(id).addEventListener("input",persist);$(id).addEventListener("paste",e=>{e.preventDefault();document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));});}
