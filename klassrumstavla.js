@@ -19,7 +19,17 @@ $("timerStart").onclick=()=>{if(running)return;if(remaining<=0)setMinutes();runn
 $("timerPause").onclick=stopTimer;$("timerReset").onclick=()=>{stopTimer();setMinutes();};
 function setEditor(id,html,plain){const el=$(id);if(typeof html!=="string"){el.innerText=plain||"";return;}const t=document.createElement("template");t.innerHTML=html;const allowed=new Set(["B","STRONG","I","EM","U","UL","OL","LI","P","DIV","BR","SPAN"]);function clean(root){for(const n of [...root.childNodes]){if(n.nodeType===1){clean(n);if(!allowed.has(n.tagName)){n.replaceWith(...n.childNodes);continue;}const size=n.style.fontSize;for(const a of [...n.attributes])n.removeAttribute(a.name);if(n.tagName==="SPAN"&&["16px","20px","24px","28px","32px","40px"].includes(size))n.style.fontSize=size;}else if(n.nodeType!==3)n.remove();}}clean(t.content);el.innerHTML=t.innerHTML;}
 function persist(){try{localStorage.setItem(key,JSON.stringify({goals:$("goals").innerText,instructions:$("instructions").innerText,goalsHtml:$("goals").innerHTML,instructionsHtml:$("instructions").innerHTML,ending:$("ending").innerText,endingHtml:$("ending").innerHTML,light:document.querySelector(".light.active")?.dataset.light}));}catch{}}
-try{const saved=JSON.parse(localStorage.getItem(key)||"{}");setEditor("goals",saved.goalsHtml,saved.goals);setEditor("instructions",saved.instructionsHtml,saved.instructions);if(saved.light)chooseLight(saved.light);}catch{}
+const endingTile=document.querySelector('[data-tile="activities"]').cloneNode(true);
+endingTile.dataset.tile="ending";
+endingTile.querySelector("h2").textContent="AVSLUT";
+endingTile.querySelector(".move-handle").setAttribute("aria-label","Flytta AVSLUT");
+const endingEditor=endingTile.querySelector(".rich-editor");
+endingEditor.id="ending";endingEditor.dataset.placeholder="Sammanfatta lektionen och reflektera";
+document.querySelector('[data-tile="activities"]').after(endingTile);
+const endingStyle=document.createElement("style");
+endingStyle.textContent='#tiles [data-tile="ending"]{min-height:350px}#tiles [data-tile="ending"] h2{font-size:clamp(1.3rem,2vw,1.9rem)}';
+document.head.append(endingStyle);
+try{const saved=JSON.parse(localStorage.getItem(key)||"{}");setEditor("goals",saved.goalsHtml,saved.goals);setEditor("instructions",saved.instructionsHtml,saved.instructions);setEditor("ending",saved.endingHtml,saved.ending);if(saved.light)chooseLight(saved.light);}catch{}
 for(const id of ["goals","instructions","ending"]){$(id).addEventListener("input",persist);$(id).addEventListener("paste",e=>{e.preventDefault();document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));});}
 function chooseLight(value){document.querySelectorAll(".light").forEach(b=>b.classList.toggle("active",b.dataset.light===value));$("lightLabel").textContent=({red:"Röd – tyst arbete",yellow:"Gul – låg samtalsnivå",green:"Grön – samarbete"})[value]||"";}
 document.querySelectorAll(".light").forEach(b=>b.onclick=()=>{chooseLight(b.dataset.light);persist();});
@@ -82,16 +92,6 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrum
 
 
 
-const endingTile=document.querySelector('[data-tile="activities"]').cloneNode(true);
-endingTile.dataset.tile="ending";
-endingTile.querySelector("h2").textContent="AVSLUT";
-endingTile.querySelector(".move-handle").setAttribute("aria-label","Flytta AVSLUT");
-const endingEditor=endingTile.querySelector(".rich-editor");
-endingEditor.id="ending";endingEditor.dataset.placeholder="Sammanfatta lektionen och reflektera";
-document.querySelector('[data-tile="activities"]').after(endingTile);
-const endingStyle=document.createElement("style");
-endingStyle.textContent='#tiles [data-tile="ending"]{min-height:350px}#tiles [data-tile="ending"] h2{font-size:clamp(1.3rem,2vw,1.9rem)}';
-document.head.append(endingStyle);
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
 const defaultPositions=[[2,74],[2,2],[51,2],[2,45],[35,74],[68,74]];
