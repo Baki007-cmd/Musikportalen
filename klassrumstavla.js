@@ -18,7 +18,7 @@ function tick(){beat++;$("beat").textContent=beat%4===1?"♩ 1":"♩ "+((beat-1)
 $("metro").onclick=()=>{if(metro!==null){stopMetro();return;}const C=window.AudioContext||window.webkitAudioContext;if(C){audio ||= new C();audio.resume();}const bpm=Math.max(40,Math.min(220,Number($("bpm").value)||80));$("bpm").value=bpm;beat=0;tick();metro=setInterval(tick,60000/bpm);$("metro").textContent="Stoppa metronom";};
 $("bpm").onchange=()=>{if(metro!==null){stopMetro();$("metro").click();}};
 $("fullscreen").onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $("board").requestFullscreen?.();};
-$("reset").onclick=()=>{if(!confirm("Nollställ anteckningar, timer och arbetsro?"))return;stopTimer();stopMetro();$("goals").innerText="";$("instructions").innerText="";resizeTextAreas();$("minutes").value=10;setMinutes();chooseLight("green");persist();};
+$("reset").onclick=()=>{if(!confirm("Nollställ anteckningar, timer och arbetsro?"))return;stopTimer();stopMetro();$("goals").replaceChildren();$("instructions").replaceChildren();resizeTextAreas();$("minutes").value=10;setMinutes();chooseLight("green");persist();};
 display();
 
 let cloudClient=null,cloudUser=null,openedBoardId=null;
