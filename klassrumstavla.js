@@ -119,6 +119,7 @@ $("hideExtras").addEventListener("click",()=>setVisibleExtras([]));
 // Extra verktyg är dolda när tavlan öppnas. De väljs via knapparna i toppmenyn.
 setVisibleExtras([]);
 document.querySelectorAll(".format-bar button").forEach(b=>{b.addEventListener("mousedown",e=>e.preventDefault());b.addEventListener("click",()=>{const el=b.closest(".tile").querySelector(".rich-editor");el.focus();document.execCommand(b.dataset.format,false,null);persist();resizeTextAreas();});});
+document.querySelectorAll(".font-size").forEach(s=>s.addEventListener("change",()=>{const el=s.closest(".tile").querySelector(".rich-editor");const selection=window.getSelection();if(!selection.rangeCount||selection.isCollapsed||!el.contains(selection.anchorNode)){s.value="";return;}const range=selection.getRangeAt(0);const span=document.createElement("span");span.style.fontSize=s.value+"px";span.append(range.extractContents());range.insertNode(span);selection.removeAllRanges();el.focus();persist();resizeTextAreas();s.value="";}));
 function resizeTextAreas(){
  for(const id of ["goals","instructions"]){
   const el=$(id);
