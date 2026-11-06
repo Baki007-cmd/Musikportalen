@@ -91,7 +91,7 @@ function detectScheduledLesson(){
 detectScheduledLesson();
 updateBoardName();
 $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrumstavla";updateBoardName();restoreBoard({grade:$("boardGrade").value,day:$("boardDay").value,lessonTime:$("boardTime").value,background:"blue",goals:"",instructions:"",light:"green",minutes:10,remaining:600,bpm:80});boardStatus("Ny tavla. Spara när du vill behålla den.");};
-(async()=>{try{cloudClient=await getMusikportalenSupabase();const {data:{user},error}=await cloudClient.auth.getUser();if(error||!user){location.replace("login.html");return;}cloudUser=user;boardStatus("Inloggad. Du kan spara klassrumstavlan.");await listBoards();}catch(e){boardStatus("Kunde inte läsa sparade tavlor: "+e.message);}})();
+(async()=>{try{cloudClient=await getMusikportalenSupabase();const {data:{user},error}=await cloudClient.auth.getUser();if(error||!user){location.replace("login.html");return;}const {data:profile,error:roleError}=await cloudClient.from("portal_users").select("role").eq("id",user.id).single();if(roleError||!["teacher","admin"].includes(profile?.role)){boardStatus("Du saknar lärarbehörighet. Kontakta administratören.");return;}cloudUser=user;boardStatus("Inloggad. Du kan spara klassrumstavlan.");await listBoards();}catch(e){boardStatus("Kunde inte läsa sparade tavlor: "+e.message);}})();
 
 
 
