@@ -1,6 +1,16 @@
 "use strict";const $=id=>document.getElementById(id);const key="musikportalen-board-v1";const bgKey="musikportalen-board-background";function setBackground(value){const allowed=["blue","staff","white","green","dark"];const choice=allowed.includes(value)?value:"blue";document.body.dataset.bg=choice;$("board").dataset.bg=choice;$("background").value=choice;try{localStorage.setItem(bgKey,choice);}catch{}}try{setBackground(localStorage.getItem(bgKey)||"blue");}catch{setBackground("blue");}$("background").addEventListener("change",e=>setBackground(e.target.value));let timer=null,remaining=600,running=false,metro=null,audio=null,beat=0;
 function clock(){const now=new Date();$("clock").textContent=now.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit",second:"2-digit"});$("today").textContent=now.toLocaleDateString("sv-SE",{weekday:"long",day:"numeric",month:"long"});}
 clock();setInterval(clock,1000);
+const floatingClock=$("floatingClock"),clockDrag=$("clockDrag"),clockPositionKey="musikportalen-floating-clock-position";
+function placeClock(x,y){const w=floatingClock.offsetWidth,h=floatingClock.offsetHeight;floatingClock.style.left=Math.max(0,Math.min(window.innerWidth-w,x))+"px";floatingClock.style.top=Math.max(0,Math.min(window.innerHeight-h,y))+"px";floatingClock.style.right="auto";}
+try{const p=JSON.parse(localStorage.getItem(clockPositionKey)||"null");if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))placeClock(p.x,p.y);}catch{}
+let clockGesture=null;
+clockDrag.addEventListener("pointerdown",e=>{if(e.pointerType==="mouse"&&e.button!==0)return;e.preventDefault();const rect=floatingClock.getBoundingClientRect();placeClock(rect.left,rect.top);clockGesture={id:e.pointerId,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top};clockDrag.setPointerCapture(e.pointerId);});
+clockDrag.addEventListener("pointermove",e=>{if(!clockGesture||clockGesture.id!==e.pointerId)return;placeClock(clockGesture.left+e.clientX-clockGesture.x,clockGesture.top+e.clientY-clockGesture.y);});
+function finishClockMove(e){if(!clockGesture||clockGesture.id!==e.pointerId)return;clockGesture=null;try{localStorage.setItem(clockPositionKey,JSON.stringify({x:floatingClock.offsetLeft,y:floatingClock.offsetTop}));}catch{}}
+clockDrag.addEventListener("pointerup",finishClockMove);clockDrag.addEventListener("pointercancel",finishClockMove);
+window.addEventListener("resize",()=>{const r=floatingClock.getBoundingClientRect();placeClock(r.left,r.top);});
+
 function display(){const m=Math.floor(remaining/60),s=remaining%60;$("countdown").textContent=String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");}
 function stopTimer(){running=false;if(timer!==null)clearInterval(timer);timer=null;}
 function setMinutes(){remaining=Math.max(1,Math.min(180,Number($("minutes").value)||10))*60;display();}
