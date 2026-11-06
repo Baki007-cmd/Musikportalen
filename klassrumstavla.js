@@ -111,7 +111,7 @@ function getTilePositions(){
 function applyTilePositions(saved){
  tileEls.forEach((tile,i)=>{
   const p=saved?.[tile.dataset.tile]||{};
-  const defaultWidth=tile.dataset.tile==="ending"?96:["goals","activities"].includes(tile.dataset.tile)?47:30;
+  const defaultWidth=tile.dataset.tile==="ending"?48:["goals","activities"].includes(tile.dataset.tile)?47:30;
   const width=Number.isFinite(Number(p.w))&&Number(p.w)>0?Number(p.w):defaultWidth;
   tile.style.width=clamp(width,18,100)+"%";
   tile.style.height=tile.dataset.tile==="ending"&&!p.h?"175px":"";
