@@ -52,6 +52,7 @@ let drag=null;
 tileEls.forEach(tile=>{
  const handle=tile.querySelector(".move-handle");
  handle.addEventListener("pointerdown",e=>{
+  if(!document.body.classList.contains("editing"))return;
   if(e.pointerType==="mouse"&&e.button!==0)return;
   e.preventDefault();
   const rect=tiles.getBoundingClientRect();
@@ -74,3 +75,13 @@ tileEls.forEach(tile=>{
  handle.addEventListener("pointercancel",finish);
 });
 window.addEventListener("resize",()=>applyTilePositions(getTilePositions()));
+
+function setEditMode(enabled){
+ document.body.classList.toggle("editing",enabled);
+ $("editMode").textContent=enabled?"Klar – visa tavlan":"Redigera tavlan";
+ $("editMode").setAttribute("aria-pressed",String(enabled));
+ for(const id of ["goals","instructions"])$(id).readOnly=!enabled;
+ $("boardName").readOnly=!enabled;
+}
+$("editMode").addEventListener("click",()=>setEditMode(!document.body.classList.contains("editing")));
+setEditMode(false);
