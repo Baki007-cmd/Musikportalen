@@ -35,13 +35,22 @@ with check ((select public.portal_is_admin()) and id<>(select auth.uid()));
 revoke all on public.portal_users from anon,authenticated;
 grant select on public.portal_users to authenticated;
 grant update(role) on public.portal_users to authenticated;
--- Extra skydd: bara godkända lärare och administratörer får läsa/skriva klassrumstavlor.
--- Restriktiv policy kombineras med befintliga ägarpolicyer.
-drop policy if exists classroom_boards_approved on public.classroom_boards;
-create policy classroom_boards_approved on public.classroom_boards
-as restrictive for all to authenticated
-using (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in ('teacher','admin')))
-with check (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in ('teacher','admin')));
+-- Lägg till restriktiva regler ovanpå befintliga ägarpolicyer.
+do $$ begin
+ if to_regclass('public.classroom_boards') is not null then
+  execute 'drop policy if exists classroom_boards_approved on public.classroom_boards';
+  execute 'create policy classroom_boards_approved on public.classroom_boards as restrictive for all to authenticated using (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in (''teacher'',''admin''))) with check (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in (''teacher'',''admin'')))';
+ end if;
+ if to_regclass('public.lesson_plans') is not null then
+  execute 'drop policy if exists lesson_plans_approved on public.lesson_plans';
+  execute 'create policy lesson_plans_approved on public.lesson_plans as restrictive for all to authenticated using (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in (''teacher'',''admin''))) with check (exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in (''teacher'',''admin'')))';
+ end if;
+end $$;
+-- Gäller endast bucket undervisningsmaterial. Övriga buckets påverkas inte.
+drop policy if exists portal_teacher_storage on storage.objects;
+create policy portal_teacher_storage on storage.objects as restrictive for all to authenticated
+using (bucket_id <> 'undervisningsmaterial' or exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in ('teacher','admin')))
+with check (bucket_id <> 'undervisningsmaterial' or exists(select 1 from public.portal_users p where p.id=(select auth.uid()) and p.role in ('teacher','admin')));
 -- AKTIVERA ADMINISTRATÖREN MANUELLT: byt DIN_EPOST mot adressen du använder för ditt konto.
 -- Kör följande rad separat när du har kontrollerat adressen:
 -- update public.portal_users set role='admin' where email='DIN_EPOST';
