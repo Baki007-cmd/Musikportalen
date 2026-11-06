@@ -98,7 +98,7 @@ function setEditMode(enabled){
  document.body.classList.toggle("editing",enabled);
  $("editMode").textContent=enabled?"Klar – visa tavlan":"Redigera tavlan";
  $("editMode").setAttribute("aria-pressed",String(enabled));
- for(const id of ["goals","instructions"])$(id).readOnly=false;
+ for(const id of ["goals","instructions"])$(id).contentEditable="true";
  $("boardName").readOnly=!enabled;
 }
 $("editMode").addEventListener("click",()=>setEditMode(!document.body.classList.contains("editing")));
@@ -118,6 +118,7 @@ document.querySelectorAll(".extra-toggle").forEach(button=>button.addEventListen
 $("hideExtras").addEventListener("click",()=>setVisibleExtras([]));
 // Extra verktyg är dolda när tavlan öppnas. De väljs via knapparna i toppmenyn.
 setVisibleExtras([]);
+document.querySelectorAll(".format-bar button").forEach(b=>{b.addEventListener("mousedown",e=>e.preventDefault());b.addEventListener("click",()=>{const el=b.closest(".tile").querySelector(".rich-editor");el.focus();document.execCommand(b.dataset.format,false,null);persist();resizeTextAreas();});});
 function resizeTextAreas(){
  for(const id of ["goals","instructions"]){
   const el=$(id);
