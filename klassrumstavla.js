@@ -42,6 +42,29 @@ function suggestLessonTime(){
 }
 for(const id of ["boardGrade","boardDay","boardTime"])$(id).addEventListener("change",()=>{if(id!=="boardTime")suggestLessonTime();openedBoardId=null;if(cloudClient&&cloudUser)listBoards().catch(e=>boardStatus("Kunde inte visa tavlor: "+e.message));});
 suggestLessonTime();
+function detectScheduledLesson(){
+ const now=new Date();
+ const weekdays=["Söndag","Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag"];
+ const day=weekdays[now.getDay()];
+ const schedules={
+  "Måndag":[["10:45","11:30","3"],["12:30","13:15","3"],["13:25","14:10","3"]],
+  "Torsdag":[["09:15","09:55","4"],["10:35","11:15","6"],["11:40","12:30","7"],["13:20","14:10","7"]],
+  "Fredag":[["09:40","10:20","5"],["10:30","11:10","5"],["11:20","12:00","5"],["14:20","15:10","8"]]
+ };
+ const slots=schedules[day]||[];
+ if(!slots.length)return;
+ const current=now.getHours()*60+now.getMinutes();
+ const mins=s=>{const [h,m]=s.split(":").map(Number);return h*60+m;};
+ const active=slots.find(([start,end])=>current>=mins(start)&&current<mins(end));
+ const upcoming=slots.find(([start])=>current<mins(start));
+ const match=active||upcoming;
+ if(!match)return;
+ $("boardDay").value=day;
+ $("boardGrade").value=match[2];
+ $("boardTime").value=match[0]+"–"+match[1];
+ boardStatus((active?"Pågående lektion":"Nästa lektion")+": "+day+", åk "+match[2]+", "+$("boardTime").value+". Välj en sparad tavla nedan.");
+}
+detectScheduledLesson();
 $("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrumstavla";restoreBoard({grade:$("boardGrade").value,day:$("boardDay").value,lessonTime:$("boardTime").value,background:"blue",goals:"",instructions:"",light:"green",minutes:10,remaining:600,bpm:80});boardStatus("Ny tavla. Spara när du vill behålla den.");};
 (async()=>{try{cloudClient=await getMusikportalenSupabase();const {data:{user},error}=await cloudClient.auth.getUser();if(error||!user){location.replace("login.html");return;}cloudUser=user;boardStatus("Inloggad. Du kan spara klassrumstavlan.");await listBoards();}catch(e){boardStatus("Kunde inte läsa sparade tavlor: "+e.message);}})();
 
