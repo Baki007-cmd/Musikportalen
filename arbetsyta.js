@@ -9,7 +9,7 @@ let client;
   if(profileError)throw profileError;
   const role=profile.role;
   document.getElementById("who").textContent="Inloggad som "+user.email+" · "+({admin:"Administratör",teacher:"Lärare",student:"Elev",pending:"Väntar på godkännande"}[role]||role);
-  document.getElementById("adminLink").hidden=role!=="admin";
+  document.getElementById("adminMenuLink").hidden=role!=="admin";
   document.getElementById("teacherTools").hidden=!["admin","teacher"].includes(role);
   document.getElementById("pendingNotice").hidden=role!=="pending";
   document.getElementById("status").hidden=true;
