@@ -142,8 +142,11 @@ $("newBoard").onclick=()=>{openedBoardId=null;$("updateBoard").hidden=true;$("bo
 const tiles=$("tiles"),positionsKey="musikportalen-tile-positions";
 const tileEls=[...tiles.querySelectorAll("[data-tile]")];
 const defaultPositions=[[2,74],[2,2],[51,2],[2,45],[35,74],[68,74]];
+const isMobileBoard=()=>window.matchMedia("(max-width:700px)").matches;
+let desktopTilePositions={};
 function clamp(n,min,max){return Math.min(max,Math.max(min,n));}
 function getTilePositions(){
+ if(isMobileBoard())return JSON.parse(JSON.stringify(desktopTilePositions));
  const result={};
  for(const tile of tileEls)result[tile.dataset.tile]={
   x:+(tile.offsetLeft/tiles.clientWidth*100).toFixed(3),
@@ -151,9 +154,11 @@ function getTilePositions(){
   w:+(tile.offsetWidth/tiles.clientWidth*100).toFixed(3),
   h:tile.offsetHeight
  };
+ desktopTilePositions=JSON.parse(JSON.stringify(result));
  return result;
 }
 function applyTilePositions(saved){
+ desktopTilePositions=JSON.parse(JSON.stringify(saved||{}));
  tileEls.forEach((tile,i)=>{
   const p=saved?.[tile.dataset.tile]||{};
   const defaultWidth=tile.dataset.tile==="ending"?48:["goals","activities"].includes(tile.dataset.tile)?47:30;
@@ -199,7 +204,7 @@ tileEls.forEach(tile=>{
   handle.addEventListener("lostpointercapture",()=>{if(gesture?.tile===tile){tile.classList.remove("moving");gesture=null;persistPositions();}});
  }
 });
-window.addEventListener("resize",()=>{const positions=getTilePositions();applyTilePositions(positions);});
+window.addEventListener("resize",()=>{if(isMobileBoard())return;const positions=Object.keys(desktopTilePositions).length?desktopTilePositions:getTilePositions();applyTilePositions(positions);});
 function setEditMode(enabled){
  document.body.classList.toggle("editing",enabled);
  $("editMode").textContent=enabled?"Klar – visa tavlan":"Redigera tavlan";
