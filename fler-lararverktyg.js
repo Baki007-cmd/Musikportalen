@@ -36,4 +36,33 @@ $("print").onclick=()=>{preview();const old=document.title;document.title=(input
 $("close").onclick=()=>{$("editor").hidden=true;current=null;};
 (async()=>{try{const client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user){location.replace("login.html");return;}const {data:profile,error}=await client.from("portal_users").select("role").eq("id",user.id).single();if(error||!["teacher","admin"].includes(profile?.role)){$("authStatus").textContent="Du behöver godkänd lärarbehörighet för att använda verktygen.";return;}ownerKey=user.id;cloud=client;const {error:tableError}=await client.from("teacher_materials").select("id").limit(1);cloudReady=!tableError;$("authStatus").hidden=true;$("app").hidden=false;if(cloudReady){const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';document.getElementById("tools").append(article);document.getElementById("sharedOpen").onclick=showShared;}else{$("authStatus").hidden=false;$("authStatus").textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";}}catch(e){$("authStatus").textContent="Kunde inte kontrollera inloggningen. Försök igen senare.";}})();
 
-async function showShared(){if(!cloudReady)return;current="library";$("editor").hidden=false;$("editorTitle").textContent="Delade lärarmaterial";$("editorHelp").textContent="Endast material som lärare aktivt valt att dela visas. Använd inte personuppgifter.";$("fields").replaceChildren();$("actions").hidden=true;$("result").hidden=true;$("savedList").replaceChildren();const {data,error}=await cloud.from("teacher_materials").select("id,type,title,content,created_at").eq("shared",true).order("created_at",{ascending:false}).limit(100);if(error){$("savedList").textContent="Kunde inte läsa materialbanken: "+error.message;return;}if(!data?.length){$("savedList").textContent="Inget delat material ännu.";return;}for(const item of data){if(!specs[item.type])continue;const row=document.createElement("div");row.className="saved-item";const label=document.createElement("span");label.textContent=item.title+" · "+specs[item.type].title;const open=document.createElement("button");open.textContent="Använd som egen mall";open.onclick=()=>{show(item.type,item.content||{});preview();};row.append(label,open);$("savedList").append(row);}$("editor").scrollIntoView({behavior:"smooth"});}
+async function showShared(){
+ if(!cloudReady)return;
+ current="library";$("editor").hidden=false;$("editorTitle").textContent="Delade lärarmaterial";
+ $("editorHelp").textContent="Sök bland material som lärare valt att dela. Ämne och årskurs hämtas från materialets beskrivning.";
+ $("fields").replaceChildren();$("actions").hidden=true;$("result").hidden=true;$("savedList").replaceChildren();
+ const {data,error}=await cloud.from("teacher_materials").select("id,type,title,content,created_at").eq("shared",true).order("created_at",{ascending:false}).limit(500);
+ if(error){$("savedList").textContent="Kunde inte läsa materialbanken: "+error.message;return;}
+ const items=(data||[]).filter(x=>specs[x.type]);
+ const filters=document.createElement("div");filters.className="material-filters";
+ const search=document.createElement("input");search.type="search";search.placeholder="Sök titel, ämne eller innehåll";search.setAttribute("aria-label","Sök material");
+ const subject=document.createElement("select");subject.setAttribute("aria-label","Filtrera efter ämne");
+ const grade=document.createElement("select");grade.setAttribute("aria-label","Filtrera efter årskurs");
+ const type=document.createElement("select");type.setAttribute("aria-label","Filtrera efter materialtyp");
+ const addOptions=(el,all,values)=>{for(const [value,label] of [[ "",all],...values.map(v=>[v,v])]){const option=document.createElement("option");option.value=value;option.textContent=label;el.append(option);}};
+ const subjectOf=x=>String(x.content?.subject||"").replace(/\\b(?:åk|årskurs)\\s*[0-9]+\\b/ig,"").trim().replace(/[-–,]+$/,"").trim();
+ const gradeOf=x=>{const m=String(x.content?.subject||"").match(/(?:åk|årskurs)\\s*([0-9]+)/i);return m?"Åk "+m[1]:"";};
+ addOptions(subject,"Alla ämnen",[...new Set(items.map(subjectOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"sv")));
+ addOptions(grade,"Alla årskurser",[...new Set(items.map(gradeOf).filter(Boolean))].sort((a,b)=>Number(a.replace(/\\D/g,""))-Number(b.replace(/\\D/g,""))));
+ for(const [value,label] of [["","Alla materialtyper"],...Object.entries(specs).filter(([key])=>key!=="library").map(([key,spec])=>[key,spec.title])]){const option=document.createElement("option");option.value=value;option.textContent=label;type.append(option);}
+ filters.append(search,subject,grade,type);$("fields").append(filters);
+ const count=document.createElement("p");count.className="note";$("savedList").append(count);
+ const results=document.createElement("div");$("savedList").append(results);
+ const renderItems=()=>{results.replaceChildren();const q=search.value.trim().toLocaleLowerCase("sv");const matching=items.filter(item=>(!subject.value||subjectOf(item)===subject.value)&&(!grade.value||gradeOf(item)===grade.value)&&(!type.value||item.type===type.value)&&(!q||[item.title,item.content?.subject,...Object.values(item.content||{})].join(" ").toLocaleLowerCase("sv").includes(q)));
+ count.textContent=matching.length+" av "+items.length+" delade material";
+ if(!matching.length){const empty=document.createElement("p");empty.textContent="Inga material matchar din sökning.";results.append(empty);}
+ for(const item of matching){const row=document.createElement("div");row.className="saved-item";const label=document.createElement("span");label.textContent=[item.title,specs[item.type].title,item.content?.subject].filter(Boolean).join(" · ");const open=document.createElement("button");open.textContent="Använd som egen mall";open.onclick=()=>{show(item.type,item.content||{});preview();};row.append(label,open);results.append(row);}
+ };
+ for(const el of [search,subject,grade,type])el.addEventListener(el===search?"input":"change",renderItems);
+ renderItems();$("editor").scrollIntoView({behavior:"smooth"});
+}
