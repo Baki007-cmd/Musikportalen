@@ -50,7 +50,7 @@ function setupSmartGenerator(){
   if(type==="lesson"){data.steps=["Start (5 min): presentera målet och koppla till elevernas tidigare kunskaper.","Genomgång (10 min): visa och förklara ett konkret exempel på "+topic+".","Gemensam övning (10 min): pröva exemplet med lärarstöd och återkoppling.","Eget eller parvis arbete (15 min): tillämpa "+topic+" med stöd vid behov.","Avslut (5 min): låt eleverna visa vad de lärt sig och besvara en exit ticket."].join("\n");data.assessment="Samla in korta elevsvar och observera arbetet. Jämför med målet: "+goal;}
   if(type==="support"){data.steps=["Läs målet: "+goal,"Titta på lärarens exempel om "+topic+".","Gör den första delen tillsammans med en kamrat eller lärare.","Fortsätt stegvis med en del i taget.","Kontrollera ditt arbete mot målet."].join("\n");data.words=["Begrepp 1 – skriv en enkel förklaring","Begrepp 2 – skriv ett exempel"].join("\n");}
   $("generatorStatus").textContent="Förslaget är skapat. Granska och redigera det innan du sparar.";
-  show(type,data);$("generator").hidden=true;
+  show(type,data);preview();$("generator").hidden=true;$("toast").textContent="Materialet är skapat och visas nedan. Du kan redigera fälten, uppdatera förhandsvisningen och sedan spara i dina mallar.";
  };
 }
 setupSmartGenerator();
