@@ -39,7 +39,8 @@ async function loadPersonalDashboard(userId){
    if(!recent.data.length){const li=document.createElement("li");li.className="empty";li.textContent="Inget sparat ännu";list.append(li);}
    for(const item of recent.data){const li=document.createElement("li");const link=document.createElement("a");link.href=config.url;link.textContent=item.title||"Utan namn";li.append(link);if(item[config.date]){const small=document.createElement("div");small.className="item-label";small.textContent=new Date(item[config.date]).toLocaleDateString("sv-SE");li.append(small);}list.append(li);}
    if(config.table==="teacher_materials"){
-    const week=recent.data.find(x=>x.type==="week");
+    const {data:weeks,error:weekError}=await client.from("teacher_materials").select("title,created_at").eq("owner_id",userId).eq("type","week").order("created_at",{ascending:false}).limit(1);
+    const week=!weekError&&weeks?.[0];
     document.getElementById("dashWeek").textContent=week?"Senaste veckoplanering: "+(week.title||"Utan namn"):"Öppna Min lärarvecka för att skapa eller se din veckoplanering.";
    }
   }catch(e){count.textContent="–";list.replaceChildren();const li=document.createElement("li");li.className="empty";li.textContent="Kunde inte läsa sparade uppgifter.";list.append(li);if(config.table==="teacher_materials")document.getElementById("dashWeek").textContent="Veckoplaneringen är tillfälligt otillgänglig.";}
