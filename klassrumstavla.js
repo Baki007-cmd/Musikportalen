@@ -48,7 +48,7 @@ let cloudClient=null,cloudUser=null,openedBoardId=null;
 function boardStatus(s){$("boardStatus").textContent=s;}
 function boardSnapshot(){return {grade:$("boardGrade").value,day:$("boardDay").value,lessonTime:$("boardTime").value,background:$("background").value,goals:$("goals").innerText,instructions:$("instructions").innerText,goalsHtml:$("goals").innerHTML,instructionsHtml:$("instructions").innerHTML,ending:$("ending").innerText,endingHtml:$("ending").innerHTML,light:document.querySelector(".light.active")?.dataset.light||"green",minutes:Number($("minutes").value)||10,remaining,bpm:Number($("bpm").value)||80,tilePositions:getTilePositions(),visibleExtras:getVisibleExtras()};}
 function restoreBoard(data){$("boardGrade").value=String(data.grade||$("boardGrade").value);if(data.day)$("boardDay").value=data.day;if(data.lessonTime)$("boardTime").value=data.lessonTime;stopTimer();stopMetro();setBackground(data.background||"blue");setEditor("goals",data.goalsHtml,data.goals);setEditor("instructions",data.instructionsHtml,data.instructions);setEditor("ending",data.endingHtml,data.ending);chooseLight(["red","yellow","green"].includes(data.light)?data.light:"green");$("minutes").value=Math.max(1,Math.min(180,Number(data.minutes)||10));remaining=Math.max(0,Math.min(10800,Number.isFinite(Number(data.remaining))?Number(data.remaining):600));$("bpm").value=Math.max(40,Math.min(220,Number(data.bpm)||80));display();persist();applyTilePositions(data.tilePositions||{});persistPositions();setVisibleExtras([]);resizeTextAreas();}
-async function listBoards(){const {data,error}=await cloudClient.from("classroom_boards").select("id,title,content,updated_at").eq("owner_id",cloudUser.id).order("updated_at",{ascending:false});if(error)throw error;const root=$("savedBoards");root.replaceChildren();const filtered=(data||[]).filter(item=>{const x=item.content||{};return (!x.grade||String(x.grade)===$("boardGrade").value)&&(!x.day||x.day===$("boardDay").value)&&(!$("boardTime").value||!x.lessonTime||x.lessonTime===$("boardTime").value);});if(!filtered.length)root.textContent="Inga sparade tavlor för det valda schemat ännu.";for(const item of filtered){const open=document.createElement("button");open.textContent="Öppna: "+item.title+" ("+[item.content?.day,item.content?.grade?"åk "+item.content.grade:"",item.content?.lessonTime].filter(Boolean).join(", ")+")";open.onclick=()=>{openedBoardId=item.id;$("boardName").value=item.title;restoreBoard(item.content||{});boardStatus("Tavlan öppnad. Välj Spara för att uppdatera den.");};const remove=document.createElement("button");remove.className="secondary";remove.textContent="Ta bort";remove.onclick=async()=>{if(!confirm("Ta bort den sparade klassrumstavlan?"))return;const {error}=await cloudClient.from("classroom_boards").delete().eq("id",item.id).eq("owner_id",cloudUser.id);if(error){boardStatus(error.message);return;}if(openedBoardId===item.id)openedBoardId=null;await listBoards();boardStatus("Tavlan togs bort.");};root.append(open,remove);}}
+async function listBoards(){const {data,error}=await cloudClient.from("classroom_boards").select("id,title,content,updated_at").eq("owner_id",cloudUser.id).order("updated_at",{ascending:false});if(error)throw error;const root=$("savedBoards");root.replaceChildren();const filtered=data||[];if(!filtered.length)root.textContent="Du har inga sparade tavlor ännu.";for(const item of filtered){const open=document.createElement("button");open.textContent="Öppna: "+item.title+" ("+[item.content?.day,item.content?.grade?"åk "+item.content.grade:"",item.content?.lessonTime].filter(Boolean).join(", ")+")";open.onclick=()=>{openedBoardId=item.id;$("boardName").value=item.title;restoreBoard(item.content||{});$("updateBoard").hidden=false;boardStatus("Tavlan öppnad. Välj Uppdatera öppnad tavla för att ändra originalet eller Spara som ny tavla för en kopia.");};const remove=document.createElement("button");remove.className="secondary";remove.textContent="Ta bort";remove.onclick=async()=>{if(!confirm("Ta bort den sparade klassrumstavlan?"))return;const {error}=await cloudClient.from("classroom_boards").delete().eq("id",item.id).eq("owner_id",cloudUser.id);if(error){boardStatus(error.message);return;}if(openedBoardId===item.id){openedBoardId=null;$("updateBoard").hidden=true;}await listBoards();boardStatus("Tavlan togs bort.");};root.append(open,remove);}}
 // PDF via webbläsarens utskriftsdialog; välj "Spara som PDF".
 const pdfButton=$("exportPdf");
 pdfButton.addEventListener("click",()=>{
@@ -69,7 +69,27 @@ pdfButton.addEventListener("click",()=>{
  window.addEventListener("afterprint",cleanup);
  window.print();
 });
-$("saveBoard").onclick=async()=>{if(!cloudUser){boardStatus("Logga in för att spara.");return;}const btn=$("saveBoard");btn.disabled=true;try{const row={owner_id:cloudUser.id,title:$("boardName").value.trim()||"Min klassrumstavla",content:boardSnapshot()};const query=openedBoardId?cloudClient.from("classroom_boards").update(row).eq("id",openedBoardId).eq("owner_id",cloudUser.id).select("id").single():cloudClient.from("classroom_boards").insert(row).select("id").single();const {data,error}=await query;if(error)throw error;openedBoardId=data.id;await listBoards();boardStatus("Klassrumstavlan sparades i Supabase.");}catch(e){boardStatus("Kunde inte spara: "+e.message+". Kontrollera att classroom_boards-tabellen finns.");}finally{btn.disabled=false;}};
+async function saveBoardCopy(updateExisting){
+ if(!cloudUser){boardStatus("Logga in för att spara.");return;}
+ if(updateExisting&&!openedBoardId){boardStatus("Öppna först en sparad tavla för att uppdatera den.");return;}
+ const btn=$(updateExisting?"updateBoard":"saveBoard");
+ btn.disabled=true;
+ try{
+  const row={owner_id:cloudUser.id,title:$("boardName").value.trim()||"Min klassrumstavla",content:boardSnapshot()};
+  const query=updateExisting
+   ?cloudClient.from("classroom_boards").update(row).eq("id",openedBoardId).eq("owner_id",cloudUser.id).select("id").single()
+   :cloudClient.from("classroom_boards").insert(row).select("id").single();
+  const {data,error}=await query;
+  if(error)throw error;
+  openedBoardId=data.id;
+  $("updateBoard").hidden=false;
+  await listBoards();
+  boardStatus(updateExisting?"Den öppnade tavlan har uppdaterats.":"En ny tavla har sparats under Mina sparade klassrumstavlor. Tidigare tavlor finns kvar.");
+ }catch(e){boardStatus("Kunde inte spara tavlan: "+e.message);}
+ finally{btn.disabled=false;}
+}
+$("saveBoard").onclick=()=>saveBoardCopy(false);
+$("updateBoard").onclick=()=>saveBoardCopy(true);
 function updateBoardName(){const now=new Date();const date=String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");$("boardName").value="ÅK"+$("boardGrade").value+" "+$("boardDay").value.toLowerCase()+" "+date;}
 function suggestLessonTime(){
  const day=$("boardDay").value,grade=$("boardGrade").value;
@@ -84,7 +104,7 @@ function suggestLessonTime(){
  else if(day==="Fredag"&&grade==="5")$("boardTime").value="09:40–10:20";
  else $("boardTime").value="";
 }
-for(const id of ["boardGrade","boardDay","boardTime"])$(id).addEventListener("change",()=>{if(id!=="boardTime")suggestLessonTime();if(id!=="boardTime")updateBoardName();openedBoardId=null;if(cloudClient&&cloudUser)listBoards().catch(e=>boardStatus("Kunde inte visa tavlor: "+e.message));});
+for(const id of ["boardGrade","boardDay","boardTime"])$(id).addEventListener("change",()=>{if(id!=="boardTime")suggestLessonTime();if(id!=="boardTime")updateBoardName();openedBoardId=null;$("updateBoard").hidden=true;if(cloudClient&&cloudUser)listBoards().catch(e=>boardStatus("Kunde inte visa tavlor: "+e.message));});
 suggestLessonTime();
 function detectScheduledLesson(){
  const now=new Date();
@@ -110,7 +130,7 @@ function detectScheduledLesson(){
 }
 detectScheduledLesson();
 updateBoardName();
-$("newBoard").onclick=()=>{openedBoardId=null;$("boardName").value="Min klassrumstavla";updateBoardName();restoreBoard({grade:$("boardGrade").value,day:$("boardDay").value,lessonTime:$("boardTime").value,background:"blue",goals:"",instructions:"",light:"green",minutes:10,remaining:600,bpm:80});boardStatus("Ny tavla. Spara när du vill behålla den.");};
+$("newBoard").onclick=()=>{openedBoardId=null;$("updateBoard").hidden=true;$("boardName").value="Min klassrumstavla";updateBoardName();restoreBoard({grade:$("boardGrade").value,day:$("boardDay").value,lessonTime:$("boardTime").value,background:"blue",goals:"",instructions:"",light:"green",minutes:10,remaining:600,bpm:80});boardStatus("Ny tavla. Spara när du vill behålla den.");};
 (async()=>{try{cloudClient=await getMusikportalenSupabase();const {data:{user},error}=await cloudClient.auth.getUser();if(error||!user){location.replace("login.html");return;}const {data:profile,error:roleError}=await cloudClient.from("portal_users").select("role").eq("id",user.id).single();if(roleError||!["teacher","admin"].includes(profile?.role)){boardStatus("Du saknar lärarbehörighet. Kontakta administratören.");return;}cloudUser=user;boardStatus("Inloggad. Du kan spara klassrumstavlan.");await listBoards();}catch(e){boardStatus("Kunde inte läsa sparade tavlor: "+e.message);}})();
 
 
