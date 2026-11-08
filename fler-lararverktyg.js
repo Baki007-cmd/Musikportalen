@@ -216,6 +216,34 @@ async function saveMaterialToDrive(){
  finally{button.disabled=false;}
 }
 $("saveDrive").onclick=saveMaterialToDrive;
+async function downloadMaterialAsWord(){
+ if(!current||current==="library")return;
+ const button=$("saveWord");button.disabled=true;
+ try{
+  if(!window.docx?.Document||!window.docx?.Packer)throw Error("Word-biblioteket kunde inte laddas. Kontrollera internetanslutningen och försök igen.");
+  const data=inputValues();
+  const raw=render(current,data);
+  const answerMarker="--- FACIT (för läraren, ta bort före elevutskrift) ---";
+  const text=current==="quiz"?raw.split(answerMarker)[0].trimEnd():raw;
+  const rows=text.split(/\r?\n/);
+  const {Document,Paragraph,TextRun,Packer}=window.docx;
+  const paragraphs=rows.map((line,index)=>new Paragraph({
+   children:[new TextRun({text:line,bold:index===0,size:index===0?32:22})],
+   spacing:{after:line?130:80},
+   ...(index===0?{heading:"Heading1"}:{})
+  }));
+  const doc=new Document({sections:[{properties:{page:{margin:{top:900,bottom:900,left:1000,right:1000}}},children:paragraphs}]});
+  const blob=await Packer.toBlob(doc);
+  const filename=(data.title||specs[current].title).replace(/[\\/:*?"<>|]/g,"-").slice(0,100)||"Lärarmaterial";
+  const url=URL.createObjectURL(blob),link=document.createElement("a");
+  link.href=url;link.download=filename+".docx";document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  $("toast").textContent="Word-dokumentet har laddats ner. Öppna det i Word för att redigera.";
+ }catch(error){$("toast").textContent=error.message||"Det gick inte att skapa Word-dokumentet.";}
+ finally{button.disabled=false;}
+}
+$("saveWord").onclick=downloadMaterialAsWord;
+
 $("print").onclick=()=>{preview();const old=document.title;document.title=(inputValues().title||"Lärarverktyget").replace(/[\\/:*?"<>|]/g,"-");window.print();document.title=old;};
 $("close").onclick=()=>{$("editor").hidden=true;current=null;};
 (async()=>{try{const client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user){location.replace("login.html");return;}const {data:profile,error}=await client.from("portal_users").select("role").eq("id",user.id).single();if(error||!["teacher","admin"].includes(profile?.role)){$("authStatus").textContent="Du behöver godkänd lärarbehörighet för att använda verktygen.";return;}ownerKey=user.id;cloud=client;const {error:tableError}=await client.from("teacher_materials").select("id").limit(1);cloudReady=!tableError;$("authStatus").hidden=true;$("app").hidden=false;if(cloudReady){const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';document.getElementById("tools").append(article);document.getElementById("sharedOpen").onclick=showShared;}else{$("authStatus").hidden=false;$("authStatus").textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";}}catch(e){$("authStatus").textContent="Kunde inte kontrollera inloggningen. Försök igen senare.";}})();
