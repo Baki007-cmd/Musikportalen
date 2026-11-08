@@ -76,17 +76,19 @@ async function loadAccount(){
  }catch{}
 }
 function mount(){
- if(document.getElementById("languageSettings"))return;
- const panel=document.createElement("div");panel.id="languageSettings";
- panel.style.cssText="position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;margin:10px auto;max-width:940px;background:#f1f5ff;color:#17213b;border:1px solid #cbd5e1;border-radius:10px;font:14px system-ui,sans-serif";
- const label=document.createElement("label");label.htmlFor="languageSelect";label.textContent="🌐 Språk / Language / Gjuha";
- const select=document.createElement("select");select.id="languageSelect";select.style.cssText="padding:7px;border-radius:6px;border:1px solid #94a3b8;width:auto;margin:0;background:white;color:#17213b";
- for(const [code,name] of Object.entries(languages)){const option=document.createElement("option");option.value=code;option.textContent=name;select.append(option)}
- select.value=lang;select.addEventListener("change",()=>save(select.value));
- const status=document.createElement("span");status.id="languageStatus";status.setAttribute("role","status");
- panel.append(label,select,status);
- const header=document.querySelector("header");if(header)header.after(panel);else document.body.prepend(panel);
- translate();loadAccount();
+ translate();
+ loadAccount();
+ if(location.pathname.endsWith("/mitt-konto.html"))return;
+ if(typeof window.getMusikportalenSupabase!=="function")return;
+ window.getMusikportalenSupabase().then(async client=>{
+  const {data:{user}}=await client.auth.getUser();
+  if(!user||document.getElementById("myAccountLanguageLink"))return;
+  const header=document.querySelector("header .top")||document.querySelector("header");
+  if(!header)return;
+  const link=document.createElement("a");link.id="myAccountLanguageLink";link.href="mitt-konto.html";
+  link.textContent="⚙ Mitt konto";link.style.cssText="color:white;font-weight:600;margin-left:12px";
+  header.append(link);
+ }).catch(()=>{});
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
 })();
