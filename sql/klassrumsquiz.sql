@@ -4,7 +4,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.classroom_quizzes (
  id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade,
  title text not null, subject text not null, grade int not null check(grade between 1 and 9),
- questions jsonb not null, pin text not null unique, position int not null default -1,
+ questions jsonb not null, pin text not null unique, position int not null default -1, question_started_at timestamptz,
  status text not null default 'lobby' check(status in ('lobby','playing','finished')),
  created_at timestamptz not null default now()
 );
@@ -19,6 +19,7 @@ create table if not exists public.classroom_quiz_answers (
  position int not null, choice int not null check(choice between 0 and 3),
  created_at timestamptz not null default now(), primary key(quiz_id,player_id,position)
 );
+alter table public.classroom_quizzes add column if not exists question_started_at timestamptz;
 alter table public.classroom_quizzes enable row level security;
 alter table public.classroom_quiz_players enable row level security;
 alter table public.classroom_quiz_answers enable row level security;
@@ -45,7 +46,7 @@ begin
   select * into q from public.classroom_quizzes where id=(p_data->>'id')::uuid and owner_id=auth.uid();
   if not found then raise exception 'Spelet hittades inte eller saknar behörighet'; end if;
   if p_action='advance' and q.status<>'finished' then
-   update public.classroom_quizzes set position=least(position+1,jsonb_array_length(questions)-1),status='playing' where id=q.id returning * into q;
+   update public.classroom_quizzes set position=least(position+1,jsonb_array_length(questions)-1),status='playing',question_started_at=now() where id=q.id returning * into q;
   elsif p_action='finish' then
    update public.classroom_quizzes set status='finished' where id=q.id returning * into q;
   end if;
@@ -54,7 +55,7 @@ begin
    where a.player_id=p.id and a.choice=(q.questions->a.position->>'correct')::int
   ),'answers',(select coalesce(jsonb_agg(jsonb_build_object('position',a.position,'choice',a.choice)),'[]'::jsonb) from public.classroom_quiz_answers a where a.player_id=p.id)) order by p.joined_at),'[]'::jsonb)
   into v_rows from public.classroom_quiz_players p where p.quiz_id=q.id;
-  return jsonb_build_object('pin',q.pin,'title',q.title,'position',q.position,'status',q.status,'questions',q.questions,'players',v_rows);
+  return jsonb_build_object('pin',q.pin,'title',q.title,'position',q.position,'status',q.status,'questions',q.questions,'started_at',q.question_started_at,'players',v_rows);
  elsif p_action='join' then
   v_pin=p_data->>'pin';v_nick=trim(p_data->>'nickname');
   if v_pin !~ '^[0-9]{6}$' or length(v_nick)<2 or length(v_nick)>24 then raise exception 'Kontrollera spelkod och smeknamn'; end if;
@@ -70,6 +71,7 @@ begin
   select * into q from public.classroom_quizzes where id=pl.quiz_id;
   if p_action='answer' then
    if q.status<>'playing' or q.position<0 then raise exception 'Ingen aktiv fråga'; end if;
+   if coalesce((q.questions->q.position->>'seconds')::int,30)>0 and now()>q.question_started_at+make_interval(secs=>coalesce((q.questions->q.position->>'seconds')::int,30)) then raise exception 'Svarstiden har gått ut'; end if;
    v_choice=(p_data->>'choice')::int;
    if v_choice not between 0 and 3 then raise exception 'Ogiltigt svar'; end if;
    insert into public.classroom_quiz_answers(quiz_id,player_id,position,choice) values(q.id,pl.id,q.position,v_choice)
@@ -78,8 +80,8 @@ begin
   select count(*) into v_score from public.classroom_quiz_answers a
   where a.player_id=pl.id and a.choice=(q.questions->a.position->>'correct')::int;
   v_question=case when q.position>=0 then q.questions->q.position else null end;
-  if v_question is not null then v_question=jsonb_build_object('text',v_question->>'text','answers',v_question->'answers'); end if;
-  return jsonb_build_object('status',q.status,'position',q.position,'question',v_question,'score',v_score,
+  if v_question is not null then v_question=jsonb_build_object('text',v_question->>'text','answers',v_question->'answers','image',v_question->>'image'); end if;
+  return jsonb_build_object('status',q.status,'position',q.position,'question',v_question,'started_at',q.question_started_at,'seconds',coalesce((q.questions->q.position->>'seconds')::int,30),'score',v_score,
     'answered',exists(select 1 from public.classroom_quiz_answers where player_id=pl.id and position=q.position),'nickname',pl.nickname);
  end if;
  raise exception 'Okänd åtgärd';
