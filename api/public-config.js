@@ -5,5 +5,5 @@ module.exports = function handler(req, res) {
   if (!url || !key || !/^https:\/\//.test(url) || !key.startsWith("sb_publishable_")) {
     return res.status(503).json({ error: "Supabase är inte konfigurerat i Vercel." });
   }
-  return res.status(200).json({ url, key });
+  return res.status(200).json({ url, key, googleDriveClientId: process.env.GOOGLE_DRIVE_CLIENT_ID || null });
 };
