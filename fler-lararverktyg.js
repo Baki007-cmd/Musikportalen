@@ -244,6 +244,47 @@ async function downloadMaterialAsWord(){
 }
 $("saveWord").onclick=downloadMaterialAsWord;
 
+async function saveToPrivateMaterialLibrary(){
+ if(!current||current==="library")return;
+ const button=$("savePrivate");button.disabled=true;$("toast").textContent="Förbereder privat lagring …";
+ let uploadedPath=null;
+ try{
+  if(!cloud)throw Error("Du måste vara inloggad med lärarbehörighet.");
+  if(!window.docx?.Document||!window.docx?.Packer)throw Error("Word-biblioteket kunde inte laddas.");
+  const data=inputValues(),subjectGrade=data.subject||"";
+  const match=subjectGrade.match(/(?:åk|årskurs)\\s*([1-9])\\b/i);
+  const grade=match?Number(match[1]):Number(prompt("Vilken årskurs (1–9)?","6"));
+  if(!Number.isInteger(grade)||grade<1||grade>9)throw Error("Välj en årskurs mellan 1 och 9.");
+  const subject=subjectGrade.replace(/(?:åk|årskurs)\\s*[1-9]\\b/ig,"").trim()||prompt("Ange ämne:","Musik")?.trim();
+  if(!subject)throw Error("Ämne saknas.");
+  const title=data.title||specs[current].title;
+  const topic=prompt("Arbetsområde:",title)?.trim();
+  if(topic===null||topic===undefined){$("toast").textContent="Sparandet avbröts.";return;}
+  if(!topic)throw Error("Arbetsområde saknas.");
+  const description=prompt("Vad har ni arbetat med? (Kan kompletteras senare)",data.instructions||"") ;
+  if(description===null){$("toast").textContent="Sparandet avbröts.";return;}
+  const raw=render(current,data);
+  const text=current==="quiz"?raw.split("--- FACIT (för läraren, ta bort före elevutskrift) ---")[0].trimEnd():raw;
+  const {Document,Paragraph,TextRun,Packer}=window.docx;
+  const paragraphs=text.split(/\\r?\\n/).map((line,index)=>new Paragraph({children:[new TextRun({text:line,bold:index===0,size:index===0?32:22})],spacing:{after:line?130:80}}));
+  const blob=await Packer.toBlob(new Document({sections:[{children:paragraphs}]}));
+  const filename=(title.replace(/[\\/:*?"<>|]/g,"-").slice(0,90)||"Undervisningsmaterial")+".docx";
+  uploadedPath=ownerKey+"/"+crypto.randomUUID()+".docx";
+  const {error:uploadError}=await cloud.storage.from("teaching-materials-private").upload(uploadedPath,blob,{contentType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",upsert:false});
+  if(uploadError)throw uploadError;
+  const {error:insertError}=await cloud.from("teaching_materials").insert({owner_id:ownerKey,title,subject,grade,topic,description:description.trim(),reflection:"",file_path:uploadedPath,file_name:filename,mime_type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+  if(insertError)throw insertError;
+  uploadedPath=null;
+  $("toast").replaceChildren(document.createTextNode("Sparat privat i Mitt undervisningsmaterial. "));
+  const link=document.createElement("a");link.href="mitt-undervisningsmaterial.html";link.textContent="Öppna materialbanken";$("toast").append(link);
+ }catch(error){
+  if(uploadedPath)await cloud.storage.from("teaching-materials-private").remove([uploadedPath]);
+  $("toast").textContent="Kunde inte spara privat: "+(error.message||String(error));
+ }finally{button.disabled=false;}
+}
+$("savePrivate").onclick=saveToPrivateMaterialLibrary;
+
+
 $("print").onclick=()=>{preview();const old=document.title;document.title=(inputValues().title||"Lärarverktyget").replace(/[\\/:*?"<>|]/g,"-");window.print();document.title=old;};
 $("close").onclick=()=>{$("editor").hidden=true;current=null;};
 (async()=>{try{const client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user){location.replace("login.html");return;}const {data:profile,error}=await client.from("portal_users").select("role").eq("id",user.id).single();if(error||!["teacher","admin"].includes(profile?.role)){$("authStatus").textContent="Du behöver godkänd lärarbehörighet för att använda verktygen.";return;}ownerKey=user.id;cloud=client;const {error:tableError}=await client.from("teacher_materials").select("id").limit(1);cloudReady=!tableError;$("authStatus").hidden=true;$("app").hidden=false;if(cloudReady){const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';document.getElementById("tools").append(article);document.getElementById("sharedOpen").onclick=showShared;}else{$("authStatus").hidden=false;$("authStatus").textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";}}catch(e){$("authStatus").textContent="Kunde inte kontrollera inloggningen. Försök igen senare.";}})();
