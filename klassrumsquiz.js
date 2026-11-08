@@ -6,7 +6,7 @@ const show=id=>{for(const x of ["chooser","teacher","host","student"])$(x).class
 const call=async(action,data={})=>{if(!client)client=await getMusikportalenSupabase();const {data:result,error}=await client.rpc("classroom_quiz_action",{p_action:action,p_data:data});if(error)throw Error(error.message);return result};
 let qrPin="";function renderJoinQr(pin){if(!/^\d{6}$/.test(String(pin))||qrPin===String(pin))return;qrPin=String(pin);const link=new URL("klassrumsquiz.html",location.href);link.searchParams.set("pin",qrPin);const url=link.toString();const el=$("quizQr");el.replaceChildren();$("quizJoinLink").href=url;$("quizJoinLink").textContent="Direktlänk för elever";if(typeof QRCode==="undefined"){el.textContent="QR-biblioteket kunde inte laddas. Använd länken.";return}new QRCode(el,{text:url,width:240,height:240,colorDark:"#18233c",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M})}const make=(tag,text,parent)=>{const el=document.createElement(tag);el.textContent=text;parent.append(el);return el};
 for(let i=0;i<4;i++){const label=make("label","Svarsalternativ "+(i+1),$("answerInputs"));const input=document.createElement("input");input.id="answer"+i;input.maxLength=160;input.required=true;label.append(input)}
-$("teacherMode").onclick=async()=>{try{client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user)throw Error("Logga in som lärare först.");const {data:profile}=await client.from("portal_users").select("role").eq("id",user.id).single();if(!["teacher","admin"].includes(profile?.role))throw Error("Du behöver godkänd lärarbehörighet.");show("teacher");msg("")}catch(e){msg(e.message)}};
+$("teacherMode").onclick=async()=>{try{client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user)throw Error("Logga in som lärare först.");const {data:profile}=await client.from("portal_users").select("role").eq("id",user.id).single();if(!["teacher","admin"].includes(profile?.role))throw Error("Du behöver godkänd lärarbehörighet.");show("teacher");msg("");refreshSavedQuizzes().catch(e=>msg(e.message))}catch(e){msg(e.message)}};
 $("studentMode").onclick=()=>{show("student");msg("")};
 function renderQuestionList(){
  const list=$("questionList");list.replaceChildren();
@@ -97,6 +97,47 @@ async function refreshStudent(){if(!studentToken)return;studentState=await call(
 function secondsRemaining(state){if(!state||state.position<0||!state.started_at)return null;const q=state.questions?.[state.position];const limit=state.seconds??q?.seconds??30;if(!limit)return null;return Math.max(0,Math.ceil((new Date(state.started_at).getTime()+limit*1000-Date.now())/1000))}
 setInterval(()=>{if(hostState){const n=secondsRemaining(hostState);$("hostTimer").textContent=n===null?"":n+" sekunder kvar"}if(studentState){const n=secondsRemaining(studentState);$("studentTimer").textContent=n===null?"":n+" sekunder kvar";if(n===0){for(const b of $("studentAnswers").querySelectorAll("button"))b.disabled=true}}},500);
 $("generateAi").onclick=async()=>{const button=$("generateAi");button.disabled=true;msg("AI skapar frågor …");try{if(!client)client=await getMusikportalenSupabase();const {data:{session}}=await client.auth.getSession();if(!session)throw Error("Logga in som lärare");const response=await fetch("/api/generate-classroom-quiz",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify({subject:$("quizSubject").value,grade:Number($("quizGrade").value),topic:$("aiTopic").value,count:Number($("aiCount").value)})});const data=await response.json();if(!response.ok)throw Error(data.error||"AI-fel");questions.push(...data.questions.slice(0,Math.max(0,30-questions.length)));renderQuestionList();msg("AI-frågor skapade. Granska innehåll och facit innan du startar.")}catch(e){msg(e.message)}finally{button.disabled=false}};
+let selectedSavedQuizId=null;
+async function refreshSavedQuizzes(){
+ const list=$("savedQuizList");list.replaceChildren();
+ if(!client)client=await getMusikportalenSupabase();
+ const {data,error}=await client.from("classroom_quiz_library").select("id,title,subject,grade,questions,updated_at").order("updated_at",{ascending:false}).limit(100);
+ if(error)throw Error("Kunde inte läsa sparade quiz. Kontrollera att SQL för quizbiblioteket är installerad. "+error.message);
+ if(!data.length){make("p","Du har ännu inga sparade quiz.",list);return}
+ for(const item of data){
+  const row=make("div","",list);row.className="saved-quiz-row";
+  make("strong",item.title||"Namnlöst quiz",row);
+  make("span"," · "+item.subject+" · Åk "+item.grade+" · "+(item.questions?.length||0)+" frågor ",row);
+  const open=make("button","Öppna",row);open.type="button";open.className="secondary";open.onclick=()=>{
+   selectedSavedQuizId=item.id;
+   questions=JSON.parse(JSON.stringify(item.questions||[])).slice(0,30);
+   $("quizTitle").value=item.title||"";$("quizSubject").value=item.subject||"Musik";$("quizGrade").value=String(item.grade||6);
+   renderQuestionList();msg("Quizet är öppnat. Du kan redigera frågorna eller starta ett nytt spel.");
+   $("questionEditor").scrollIntoView({behavior:"smooth",block:"start"});
+  };
+  const del=make("button","Ta bort",row);del.type="button";del.className="secondary";del.onclick=async()=>{
+   if(!confirm("Vill du ta bort det sparade quizet "+item.title+"?"))return;
+   const {error}=await client.from("classroom_quiz_library").delete().eq("id",item.id);
+   if(error){msg(error.message);return}
+   if(selectedSavedQuizId===item.id)selectedSavedQuizId=null;
+   await refreshSavedQuizzes();msg("Det sparade quizet har tagits bort.");
+  };
+ }
+}
+$("saveQuizLibrary").onclick=async()=>{
+ const validation=validateQuestions();if(validation){msg(validation);return}
+ const title=$("quizTitle").value.trim();if(!title){msg("Skriv ett namn på quizet först.");return}
+ try{
+  if(!client)client=await getMusikportalenSupabase();
+  const {data:{user}}=await client.auth.getUser();if(!user)throw Error("Logga in som lärare för att spara.");
+  const payload={owner_id:user.id,title,subject:$("quizSubject").value.trim()||"Musik",grade:Number($("quizGrade").value),questions:JSON.parse(JSON.stringify(questions)),updated_at:new Date().toISOString()};
+  const query=selectedSavedQuizId?client.from("classroom_quiz_library").update(payload).eq("id",selectedSavedQuizId):client.from("classroom_quiz_library").insert(payload);
+  const {data,error}=await query.select("id").single();if(error)throw Error(error.message);
+  selectedSavedQuizId=data.id;await refreshSavedQuizzes();msg("Quizet är sparat i ditt quizbibliotek med alla frågor och svar.");
+ }catch(e){msg("Kunde inte spara: "+e.message)}
+};
+$("newQuizLibrary").onclick=()=>{selectedSavedQuizId=null;questions=[];$("quizTitle").value="";renderQuestionList();msg("Nytt quiz. Tidigare sparade quiz finns kvar i biblioteket.")};
+$("refreshQuizLibrary").onclick=async()=>{try{await refreshSavedQuizzes();msg("Quizbiblioteket är uppdaterat.")}catch(e){msg(e.message)}};
 $("saveDraft").onclick=()=>{try{localStorage.setItem("lararverktyget-quiz-draft",JSON.stringify({questions,title:$("quizTitle").value,subject:$("quizSubject").value,grade:$("quizGrade").value}));msg("Utkast sparat i denna webbläsare. Det synkroniseras inte mellan enheter.")}catch(e){msg("Kunde inte spara utkast: "+e.message)}};
 $("loadDraft").onclick=()=>{try{const data=JSON.parse(localStorage.getItem("lararverktyget-quiz-draft")||"null");if(!data||!Array.isArray(data.questions))throw Error("Inget sparat utkast");questions=data.questions.slice(0,30);$("quizTitle").value=data.title||"";$("quizSubject").value=data.subject||"Musik";$("quizGrade").value=data.grade||"6";renderQuestionList();msg("Utkast laddat. Frågor och svarsalternativ kan redigeras.")}catch(e){msg(e.message)}};
 $("duplicateQuestion").onclick=()=>{if(!questions.length){msg("Lägg först till en fråga.");return}if(questions.length>=30){msg("Högst 30 frågor.");return}questions.push(JSON.parse(JSON.stringify(questions[questions.length-1])));renderQuestionList();msg("Sista frågan duplicerad. Du kan redigera kopian.")};
