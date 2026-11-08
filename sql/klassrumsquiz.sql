@@ -92,3 +92,31 @@ end $$;
 revoke all on function public.classroom_quiz_action(text,jsonb) from public;
 grant execute on function public.classroom_quiz_action(text,jsonb) to anon,authenticated;
 -- Kör detta skript innan klassrumsquiz.html används.
+
+-- Quizbibliotek: sparade quiz per lärare, med frågor och svarsalternativ.
+create table if not exists public.classroom_quiz_library (
+ id uuid primary key default gen_random_uuid(),
+ owner_id uuid not null references auth.users(id) on delete cascade,
+ title text not null,
+ subject text not null default 'Musik',
+ grade integer not null check(grade between 1 and 9),
+ questions jsonb not null,
+ created_at timestamptz not null default now(),
+ updated_at timestamptz not null default now(),
+ constraint quiz_library_questions_array check(jsonb_typeof(questions)='array' and jsonb_array_length(questions) between 1 and 30)
+);
+create index if not exists classroom_quiz_library_owner_updated_idx on public.classroom_quiz_library(owner_id,updated_at desc);
+alter table public.classroom_quiz_library enable row level security;
+grant select,insert,update,delete on public.classroom_quiz_library to authenticated;
+drop policy if exists quiz_library_teacher_select on public.classroom_quiz_library;
+create policy quiz_library_teacher_select on public.classroom_quiz_library for select to authenticated using
+ (owner_id=auth.uid() and exists(select 1 from public.portal_users where id=auth.uid() and role in ('teacher','admin')));
+drop policy if exists quiz_library_teacher_insert on public.classroom_quiz_library;
+create policy quiz_library_teacher_insert on public.classroom_quiz_library for insert to authenticated with check
+ (owner_id=auth.uid() and exists(select 1 from public.portal_users where id=auth.uid() and role in ('teacher','admin')));
+drop policy if exists quiz_library_teacher_update on public.classroom_quiz_library;
+create policy quiz_library_teacher_update on public.classroom_quiz_library for update to authenticated using
+ (owner_id=auth.uid() and exists(select 1 from public.portal_users where id=auth.uid() and role in ('teacher','admin'))) with check (owner_id=auth.uid());
+drop policy if exists quiz_library_teacher_delete on public.classroom_quiz_library;
+create policy quiz_library_teacher_delete on public.classroom_quiz_library for delete to authenticated using
+ (owner_id=auth.uid() and exists(select 1 from public.portal_users where id=auth.uid() and role in ('teacher','admin')));
