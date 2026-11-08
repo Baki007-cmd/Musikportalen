@@ -200,7 +200,7 @@ async function saveMaterialToDrive(){
   const content=render(current,data);
   const metadata={name,mimeType:"application/vnd.google-apps.document"};
   const boundary="lararverktyget_"+Date.now();
-  const multipart="--"+boundary+"\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n"+JSON.stringify(metadata)+"\\r\\n--"+boundary+"\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\\r\\n"+content+"\\r\\n--"+boundary+"--";
+  const multipart="--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(metadata)+"\r\n--"+boundary+"\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n"+content+"\r\n--"+boundary+"--";
   const response=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink",{
    method:"POST",
    headers:{"Authorization":"Bearer "+token,"Content-Type":"multipart/related; boundary="+boundary},
