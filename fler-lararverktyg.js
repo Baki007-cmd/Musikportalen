@@ -164,6 +164,58 @@ document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>show(b.dataset
 $("toolSearch").oninput=()=>{const q=$("toolSearch").value.toLowerCase().trim();document.querySelectorAll(".tool").forEach(t=>t.hidden=!!q&&!t.textContent.toLowerCase().includes(q)&&!t.dataset.key.includes(q));};
 $("generate").onclick=preview;
 $("save").onclick=async()=>{if(!current||current==="library")return;const data=inputValues();if(cloudReady){const {error}=await cloud.from("teacher_materials").insert({owner_id:ownerKey,type:current,title:data.title||specs[current].title,content:data});if(!error){$("toast").textContent="Sparat i ditt konto i molnet.";preview();return;}$("toast").textContent="Molnlagring misslyckades: "+error.message+" Sparar lokalt i stället.";}const items=load();items.unshift({id:Date.now()+"-"+Math.random().toString(36).slice(2),type:current,data,created:new Date().toISOString()});if(store(items)){if(!cloudReady)$("toast").textContent="Sparat lokalt. Molnlagring kräver databasinstallation.";preview();}};
+let driveTokenClient=null;
+function waitForGoogleIdentity(){
+ return new Promise((resolve,reject)=>{
+  if(window.google?.accounts?.oauth2)return resolve();
+  let attempts=0;
+  const interval=setInterval(()=>{
+   if(window.google?.accounts?.oauth2){clearInterval(interval);resolve();}
+   else if(++attempts>=40){clearInterval(interval);reject(new Error("Google-inloggning kunde inte laddas. Kontrollera anslutningen och försök igen."));}
+  },150);
+ });
+}
+async function saveMaterialToDrive(){
+ if(!current||current==="library")return;
+ const button=$("saveDrive");
+ button.disabled=true;
+ $("toast").textContent="Förbereder Google Drive …";
+ try{
+  const configResponse=await fetch("/api/public-config",{cache:"no-store"});
+  if(!configResponse.ok)throw Error("Kunde inte läsa Google-inställningarna.");
+  const config=await configResponse.json();
+  if(!config.googleDriveClientId)throw Error("Google Drive behöver aktiveras. Lägg till GOOGLE_DRIVE_CLIENT_ID i Vercel och publicera igen.");
+  await waitForGoogleIdentity();
+  const token=await new Promise((resolve,reject)=>{
+   driveTokenClient=window.google.accounts.oauth2.initTokenClient({
+    client_id:config.googleDriveClientId,
+    scope:"https://www.googleapis.com/auth/drive.file",
+    callback:response=>response?.access_token?resolve(response.access_token):reject(Error(response?.error_description||"Google gav inte behörighet till Drive.")),
+    error_callback:()=>reject(Error("Google-inloggningen avbröts eller blockerades."))
+   });
+   driveTokenClient.requestAccessToken({prompt:"consent"});
+  });
+  const data=inputValues();
+  const name=(data.title||specs[current].title).replace(/[\\/:*?"<>|]/g,"-").slice(0,120);
+  const content=render(current,data);
+  const metadata={name,mimeType:"application/vnd.google-apps.document"};
+  const boundary="lararverktyget_"+Date.now();
+  const multipart="--"+boundary+"\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n"+JSON.stringify(metadata)+"\\r\\n--"+boundary+"\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\\r\\n"+content+"\\r\\n--"+boundary+"--";
+  const response=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink",{
+   method:"POST",
+   headers:{"Authorization":"Bearer "+token,"Content-Type":"multipart/related; boundary="+boundary},
+   body:new Blob([multipart],{type:"text/plain;charset=UTF-8"})
+  });
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error?.message||"Det gick inte att spara i Google Drive.");
+  const link=document.createElement("a");
+  link.href=result.webViewLink||"https://docs.google.com/document/d/"+encodeURIComponent(result.id)+"/edit";
+  link.target="_blank";link.rel="noopener noreferrer";link.textContent="Öppna dokumentet i Google Drive";
+  $("toast").replaceChildren(document.createTextNode("Sparat i Google Drive. "),link);
+ }catch(error){$("toast").textContent=error.message||"Kunde inte spara i Google Drive.";}
+ finally{button.disabled=false;}
+}
+$("saveDrive").onclick=saveMaterialToDrive;
 $("print").onclick=()=>{preview();const old=document.title;document.title=(inputValues().title||"Lärarverktyget").replace(/[\\/:*?"<>|]/g,"-");window.print();document.title=old;};
 $("close").onclick=()=>{$("editor").hidden=true;current=null;};
 (async()=>{try{const client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user){location.replace("login.html");return;}const {data:profile,error}=await client.from("portal_users").select("role").eq("id",user.id).single();if(error||!["teacher","admin"].includes(profile?.role)){$("authStatus").textContent="Du behöver godkänd lärarbehörighet för att använda verktygen.";return;}ownerKey=user.id;cloud=client;const {error:tableError}=await client.from("teacher_materials").select("id").limit(1);cloudReady=!tableError;$("authStatus").hidden=true;$("app").hidden=false;if(cloudReady){const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';document.getElementById("tools").append(article);document.getElementById("sharedOpen").onclick=showShared;}else{$("authStatus").hidden=false;$("authStatus").textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";}}catch(e){$("authStatus").textContent="Kunde inte kontrollera inloggningen. Försök igen senare.";}})();
