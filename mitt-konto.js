@@ -15,3 +15,25 @@ content.hidden=false;}catch(e){account.textContent="Kunde inte kontrollera inlog
 form.addEventListener("submit",async e=>{e.preventDefault();message.className="";const current=document.getElementById("current").value,next=document.getElementById("next").value,confirm=document.getElementById("confirm").value;if(next!==confirm){message.textContent="De nya lösenorden stämmer inte överens.";message.className="error";return;}if(next===current){message.textContent="Välj ett annat lösenord än det nuvarande.";message.className="error";return;}save.disabled=true;message.textContent="Kontrollerar lösenordet…";try{const verified=await client.auth.signInWithPassword({email:user.email,password:current});if(verified.error)throw new Error("Det nuvarande lösenordet är felaktigt.");const changed=await client.auth.updateUser({password:next});if(changed.error)throw changed.error;form.reset();message.textContent="Ditt lösenord har ändrats.";message.className="success";}catch(err){message.textContent="Kunde inte ändra lösenord: "+err.message;message.className="error";}finally{save.disabled=false;}});
 
 document.getElementById("nameForm").addEventListener("submit",async e=>{e.preventDefault();const name=document.getElementById("displayName").value.trim(),msg=document.getElementById("nameMessage"),button=document.getElementById("saveName");if(!name){msg.textContent="Ange ett namn.";msg.className="error";return;}button.disabled=true;msg.textContent="Sparar…";try{const {error}=await client.auth.updateUser({data:{full_name:name}});if(error)throw error;msg.textContent="Namnet har sparats.";msg.className="success";}catch(err){msg.textContent="Kunde inte spara namnet: "+err.message;msg.className="error";}finally{button.disabled=false;}});
+
+const accountLanguage=document.getElementById("accountLanguage");
+const languageMessage=document.getElementById("languageMessage");
+(async()=>{
+ try{
+  const c=await getMusikportalenSupabase();
+  const {data:{user:current}}=await c.auth.getUser();
+  if(!current)return;
+  const preferred=current.user_metadata?.preferred_language;
+  accountLanguage.value=["sv","en","sq"].includes(preferred)?preferred:(localStorage.getItem("musikportalen-language")||"sv");
+ }catch(e){languageMessage.textContent="Kunde inte läsa språkval: "+e.message}
+})();
+document.getElementById("saveLanguage").addEventListener("click",async()=>{
+ try{
+  const c=await getMusikportalenSupabase();
+  const {error}=await c.auth.updateUser({data:{preferred_language:accountLanguage.value}});
+  if(error)throw error;
+  localStorage.setItem("musikportalen-language",accountLanguage.value);
+  languageMessage.textContent="Språkvalet är sparat i ditt konto.";
+  location.reload();
+ }catch(e){languageMessage.textContent="Kunde inte spara språkval: "+e.message}
+});
