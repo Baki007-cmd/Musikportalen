@@ -82,7 +82,10 @@ begin
   v_question=case when q.position>=0 then q.questions->q.position else null end;
   if v_question is not null then v_question=jsonb_build_object('text',v_question->>'text','answers',v_question->'answers','image',v_question->>'image'); end if;
   return jsonb_build_object('status',q.status,'position',q.position,'question',v_question,'started_at',q.question_started_at,'seconds',coalesce((q.questions->q.position->>'seconds')::int,30),'score',v_score,
-    'answered',exists(select 1 from public.classroom_quiz_answers where player_id=pl.id and position=q.position),'nickname',pl.nickname);
+    'answered',exists(select 1 from public.classroom_quiz_answers where player_id=pl.id and position=q.position),
+    'correct_choice',case when q.status='finished' or exists(select 1 from public.classroom_quiz_answers where player_id=pl.id and position=q.position) then (q.questions->q.position->>'correct')::int else null end,
+    'selected_choice',(select a.choice from public.classroom_quiz_answers a where a.player_id=pl.id and a.position=q.position),
+    'nickname',pl.nickname);
  end if;
  raise exception 'Okänd åtgärd';
 end $$;
