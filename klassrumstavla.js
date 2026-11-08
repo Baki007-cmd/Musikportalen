@@ -236,8 +236,12 @@ function resizeTextAreas(){
  for(const id of ["goals","instructions","ending"]){
   const el=$(id);
   el.style.height="auto";
-  el.style.height=Math.max(260,el.scrollHeight+4)+"px";
+  const minHeight=window.matchMedia("(max-width:700px)").matches?68:260;
+  el.style.height=Math.max(minHeight,el.scrollHeight+4)+"px";
  }
 }
 for(const id of ["goals","instructions"])$(id).addEventListener("input",resizeTextAreas);
 resizeTextAreas();
+
+// Recalculate editable content heights when switching between desktop and mobile.
+window.addEventListener("resize",resizeTextAreas);
