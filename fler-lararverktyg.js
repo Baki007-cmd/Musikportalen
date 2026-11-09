@@ -277,8 +277,7 @@ async function saveToPrivateMaterialLibrary(){
   if(!window.docx?.Document||!window.docx?.Packer)throw Error("Word-biblioteket kunde inte laddas.");
   const data=inputValues(),subjectGrade=data.subject||"";
   const match=subjectGrade.match(/(?:åk|årskurs)\\s*([1-9])\\b/i);
-  const grade=match?Number(match[1]):Number(prompt("Vilken årskurs (1–9)?","6"));
-  if(!Number.isInteger(grade)||grade<1||grade>9)throw Error("Välj en årskurs mellan 1 och 9.");
+  const grade=match?Number(match[1]):null;
   const subject=subjectGrade.replace(/(?:åk|årskurs)\\s*[1-9]\\b/ig,"").trim()||prompt("Ange ämne:","Musik")?.trim();
   if(!subject)throw Error("Ämne saknas.");
   const title=data.title||specs[current].title;
