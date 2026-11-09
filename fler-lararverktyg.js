@@ -44,6 +44,30 @@ window.addEventListener("afterprint",()=>{
  if(quizPrintOriginal!==null){$("result").textContent=quizPrintOriginal;quizPrintOriginal=null;}
 });
 
+async function refreshSavedWeeks(){
+ const panel=$("savedWeeks");if(!panel)return;
+ let items=load().filter(item=>item.type==="week");
+ if(cloudReady&&cloud){
+  const {data,error}=await cloud.from("teacher_materials").select("id,type,title,content,created_at,owner_id").eq("owner_id",ownerKey).eq("type","week").order("created_at",{ascending:false}).limit(100);
+  if(!error)items=[...(data||[]).map(x=>({id:x.id,type:"week",data:x.content||{},created:x.created_at,remote:true})),...items];
+ }
+ items.sort((a,b)=>new Date(b.created||0)-new Date(a.created||0));
+ panel.replaceChildren();
+ const heading=document.createElement("h3");heading.textContent="Mina sparade veckor";panel.append(heading);
+ if(!items.length){const empty=document.createElement("p");empty.className="note";empty.textContent="Du har ännu inte sparat någon veckoplanering.";panel.append(empty);return}
+ for(const item of items){
+  const row=document.createElement("div");row.className="saved-week";
+  const title=document.createElement("strong");title.textContent=item.data?.title||"Veckoplanering";row.append(title);
+  const date=document.createElement("small");date.textContent="Sparad "+new Date(item.created).toLocaleDateString("sv-SE")+(item.remote?" · Mitt konto":" · Denna webbläsare");row.append(date);
+  const open=document.createElement("button");open.type="button";open.textContent="Öppna veckan";open.onclick=()=>{show("week",item.data||{});preview()};row.append(open);
+  const remove=document.createElement("button");remove.type="button";remove.className="secondary";remove.textContent="Ta bort";remove.onclick=async()=>{
+   if(!confirm("Ta bort denna veckoplanering?"))return;
+   if(item.remote){const {error}=await cloud.from("teacher_materials").delete().eq("id",item.id).eq("owner_id",ownerKey);if(error){$("toast").textContent=error.message;return}}
+   else store(load().filter(x=>x.id!==item.id));
+   await refreshSavedWeeks();
+  };row.append(remove);panel.append(row);
+ }
+}
 async function showSaved(){const list=$("savedList");list.replaceChildren();let items=load();if(cloudReady){const {data,error}=await cloud.from("teacher_materials").select("id,type,title,content,shared,created_at,owner_id").eq("owner_id",ownerKey).order("created_at",{ascending:false}).limit(150);if(!error)items=(data||[]).filter(x=>x.owner_id===ownerKey).map(x=>({id:x.id,type:x.type,data:x.content,created:x.created_at,shared:x.shared,remote:true}));else{$("toast").textContent="Molnlagring kunde inte läsas. Visar lokalt material.";}}if(!items.length){list.textContent="Inget sparat material ännu.";return;}const heading=document.createElement("h3");heading.textContent="Sparade material";list.append(heading);for(const item of items){if(!specs[item.type]||item.type==="library")continue;const row=document.createElement("div");row.className="saved-item";const name=document.createElement("span");name.textContent=(item.data.title||specs[item.type].title)+" · "+new Date(item.created).toLocaleDateString("sv-SE");const actions=document.createElement("div");const open=document.createElement("button");open.textContent="Öppna";open.onclick=()=>{show(item.type,item.data);preview();};const del=document.createElement("button");del.className="secondary";del.textContent="Ta bort";del.onclick=async()=>{if(!confirm("Ta bort detta sparade material?"))return;if(item.remote){const {error}=await cloud.from("teacher_materials").delete().eq("id",item.id).eq("owner_id",ownerKey);if(error){$("toast").textContent=error.message;return;}}else store(load().filter(x=>x.id!==item.id));showSaved();};if(item.remote){const share=document.createElement("button");share.className="secondary";share.textContent=item.shared?"Sluta dela":"Dela med lärare";share.onclick=async()=>{if(!item.shared&&!confirm("Vill du dela detta material med alla godkända lärare på Lärarverktyget? Dela aldrig elevuppgifter."))return;const {error}=await cloud.from("teacher_materials").update({shared:!item.shared,updated_at:new Date().toISOString()}).eq("id",item.id).eq("owner_id",ownerKey);if(error){$("toast").textContent=error.message;return;}$("toast").textContent=item.shared?"Delningen är avstängd.":"Materialet är nu delat med godkända lärare.";showSaved();};actions.append(share);}actions.append(open,del);row.append(name,actions);list.append(row);}}
 function setupSmartGenerator(){
  const card=document.createElement("article");card.className="tool";card.dataset.key="smart generator materialgenerator skapa arbetsblad quiz lektionsupplägg";
@@ -163,7 +187,7 @@ setupSmartGenerator();
 document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>show(b.dataset.open));
 $("toolSearch").oninput=()=>{const q=$("toolSearch").value.toLowerCase().trim();document.querySelectorAll(".tool").forEach(t=>t.hidden=!!q&&!t.textContent.toLowerCase().includes(q)&&!t.dataset.key.includes(q));};
 $("generate").onclick=preview;
-$("save").onclick=async()=>{if(!current||current==="library")return;const data=inputValues();if(cloudReady){const {error}=await cloud.from("teacher_materials").insert({owner_id:ownerKey,type:current,title:data.title||specs[current].title,content:data});if(!error){$("toast").textContent="Sparat i ditt konto i molnet.";preview();return;}$("toast").textContent="Molnlagring misslyckades: "+error.message+" Sparar lokalt i stället.";}const items=load();items.unshift({id:Date.now()+"-"+Math.random().toString(36).slice(2),type:current,data,created:new Date().toISOString()});if(store(items)){if(!cloudReady)$("toast").textContent="Sparat lokalt. Molnlagring kräver databasinstallation.";preview();}};
+$("save").onclick=async()=>{if(!current||current==="library")return;const data=inputValues();if(cloudReady){const {error}=await cloud.from("teacher_materials").insert({owner_id:ownerKey,type:current,title:data.title||specs[current].title,content:data});if(!error){$("toast").textContent="Sparat i ditt konto i molnet.";preview();if(current==="week")await refreshSavedWeeks();return;}$("toast").textContent="Molnlagring misslyckades: "+error.message+" Sparar lokalt i stället.";}const items=load();items.unshift({id:Date.now()+"-"+Math.random().toString(36).slice(2),type:current,data,created:new Date().toISOString()});if(store(items)){if(!cloudReady)$("toast").textContent="Sparat lokalt. Molnlagring kräver databasinstallation.";preview();if(current==="week")await refreshSavedWeeks();}};
 let driveTokenClient=null;
 function waitForGoogleIdentity(){
  return new Promise((resolve,reject)=>{
@@ -319,3 +343,4 @@ async function showShared(){
  for(const el of [search,subject,grade,type])el.addEventListener(el===search?"input":"change",renderItems);
  renderItems();$("editor").scrollIntoView({behavior:"smooth"});
 }
+\n
