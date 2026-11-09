@@ -32,6 +32,40 @@ function addImageUpload(label,q){
   finally{fileInput.disabled=false;fileInput.value=""}
  };
 }
+// Original, synthesized background loops; no external music or copyrighted recordings.
+let musicContext=null,musicTimer=null,musicMode="none",musicStep=0,musicEnabled=false;
+const musicPatterns={pulse:[220,0,330,0,262,0,392,0],arcade:[392,494,587,494,440,523,659,523],calm:[262,330,392,330,294,349,440,349]};
+function stopQuizMusic(){if(musicTimer){clearInterval(musicTimer);musicTimer=null}musicMode="none"}
+function musicNote(freq,duration,mode){
+ if(!musicContext||!freq)return;
+ const oscillator=musicContext.createOscillator(),gain=musicContext.createGain(),now=musicContext.currentTime;
+ oscillator.type=mode==="calm"?"sine":mode==="arcade"?"square":"triangle";
+ oscillator.frequency.value=freq;
+ gain.gain.setValueAtTime(0.0001,now);
+ gain.gain.exponentialRampToValueAtTime(mode==="calm"?0.035:0.023,now+0.025);
+ gain.gain.exponentialRampToValueAtTime(0.0001,now+duration);
+ oscillator.connect(gain).connect(musicContext.destination);
+ oscillator.start(now);oscillator.stop(now+duration+0.02);
+}
+function setQuizMusic(mode){
+ if(!musicEnabled)return;
+ if(musicMode===mode&&musicTimer)return;
+ stopQuizMusic();if(!musicPatterns[mode])return;
+ musicMode=mode;musicStep=0;
+ const play=()=>{const notes=musicPatterns[mode];musicNote(notes[musicStep++%notes.length],mode==="calm"?0.42:0.17,mode)};
+ play();musicTimer=setInterval(play,mode==="calm"?490:mode==="arcade"?230:280);
+}
+$("toggleMusic").onclick=async()=>{
+ if(musicEnabled){musicEnabled=false;stopQuizMusic();$("toggleMusic").textContent="▶ Starta bakgrundsmusik";return}
+ try{musicContext ||=new (window.AudioContext||window.webkitAudioContext)();await musicContext.resume();musicEnabled=true;$("toggleMusic").textContent="■ Stäng av musik";updateQuizMusic()}catch(e){msg("Kunde inte spela upp musik: "+e.message)}
+};
+$("lobbyMusic").onchange=()=>updateQuizMusic();
+function updateQuizMusic(){
+ if(!musicEnabled||!hostState)return;
+ const state=hostState;
+ const mode=state.status==="finished"?"none":state.position<0?$("lobbyMusic").value:(state.questions[state.position]?.music||"none");
+ setQuizMusic(mode);
+}
 function renderQuestionList(){
  const list=$("questionList");list.replaceChildren();
  $("questionCount").textContent=questions.length+" frågor tillagda";
@@ -53,6 +87,7 @@ function renderQuestionList(){
   correctSelect.value=String(q.correct);correctSelect.onchange=()=>{q.correct=Number(correctSelect.value)};correctLabel.append(correctSelect);
   const imageLabel=make("label","Bildadress (valfritt)",li);
   const imageInput=document.createElement("input");imageInput.type="url";imageInput.placeholder="https://";imageInput.value=q.image||"";imageInput.oninput=()=>{q.image=imageInput.value.trim()};imageLabel.append(imageInput);addImageUpload(imageLabel,q);
+  const musicLabel=make("label","Bakgrundsmusik för frågan",li);const musicSelect=document.createElement("select");musicSelect.className="music-choice";for(const [value,name] of [["none","Ingen musik"],["pulse","Spännande puls"],["arcade","Spelmusik"],["calm","Lugn musik"]]){const option=document.createElement("option");option.value=value;option.textContent=name;musicSelect.append(option)}musicSelect.value=q.music||"pulse";q.music=musicSelect.value;musicSelect.onchange=()=>{q.music=musicSelect.value};musicLabel.append(musicSelect);
   const timeLabel=make("label","Tidsgräns",li);const timeSelect=document.createElement("select");
   for(const seconds of [15,30,60,0]){const option=document.createElement("option");option.value=String(seconds);option.textContent=seconds?seconds+" sekunder":"Ingen tidsgräns";timeSelect.append(option)}
   timeSelect.value=String(q.seconds??30);timeSelect.onchange=()=>{q.seconds=Number(timeSelect.value)};timeLabel.append(timeSelect);
@@ -80,7 +115,7 @@ $("addQuestion").onclick=async()=>{
  const file=$("questionImageFile")?.files?.[0];
  if(file){$("addQuestion").disabled=true;$("questionImageStatus").textContent="Laddar upp bild …";try{image=await uploadQuizImage(file)}catch(e){msg(e.message);$("questionImageStatus").textContent=e.message;return}finally{$("addQuestion").disabled=false}}
  const seconds=Number($("questionTime").value);
- questions.push({text,answers,correct,image,seconds});
+ questions.push({text,answers,correct,image,seconds,music:$("questionMusic").value});
  $("questionImage").value="";$("questionImageFile").value="";$("questionImageStatus").textContent="";$("questionText").value="";
  for(let i=0;i<4;i++)$("answer"+i).value="";
  renderQuestionList();msg("Frågan är tillagd. Du kan redigera alla alternativ nedan.");
@@ -117,7 +152,7 @@ function renderResults(state){
  if(!ranking.length)make("p","Inga deltagare ännu.",panel);
  ranking.forEach((p,i)=>{const line=make("div",(i+1)+". "+p.nickname+" – "+p.score+" poäng",panel);line.className="score"});
 }
-async function refreshHost(){if(!hostId)return;hostState=await call("host",{id:hostId});const s=hostState;$("hostTitle").textContent=s.title;$("pin").textContent=s.pin;renderJoinQr(s.pin);$("joined").textContent=s.players.length+" deltagare";$("players").replaceChildren();for(const p of s.players)make("div",p.nickname+(s.status==="finished"?" – "+p.score+" poäng":""),$("players")).className="score";$("nextQuestion").disabled=s.status==="finished"||s.position>=s.questions.length-1;$("nextQuestion").textContent=s.position<0?"Starta första frågan":"Avsluta frågan och gå vidare direkt";$("finishGame").disabled=s.status==="finished";renderResults(s);const container=$("hostQuestion");container.replaceChildren();if(s.position>=0){const q=s.questions[s.position];if(q.image&&/^https:\/\//i.test(q.image)){const img=document.createElement("img");img.src=q.image;img.alt="Bild till quizfrågan";img.className="quiz-image";container.append(img)}make("h2","Fråga "+(s.position+1)+" av "+s.questions.length,container);make("div",q.text,container).className="question";const answers=make("div","",container);answers.className="answers";q.answers.forEach((answer,i)=>make("button",answer,answers).disabled=true);const total=s.players.reduce((n,p)=>n+p.answers.filter(a=>a.position===s.position).length,0);make("p",total+" av "+s.players.length+" har svarat.",container);if(s.status==="finished")make("p","Rätt svar: "+q.answers[q.correct],container)}if(s.status==="finished")msg("Quizet är avslutat. Resultaten och diagrammen visas nedan.")};
+async function refreshHost(){if(!hostId)return;hostState=await call("host",{id:hostId});const s=hostState;$("hostTitle").textContent=s.title;$("pin").textContent=s.pin;renderJoinQr(s.pin);$("joined").textContent=s.players.length+" deltagare";$("players").replaceChildren();for(const p of s.players)make("div","🎮 "+p.nickname,$("players")).className="lobby-player";const rank=$("liveRanking");rank.replaceChildren();if(s.position>=0){make("h3","🏆 Aktuell poängställning",rank);[...s.players].sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,10).forEach((p,i)=>make("div",(i+1)+". "+p.nickname+" – "+p.score+" poäng",rank).className="score")}updateQuizMusic();$("nextQuestion").disabled=s.status==="finished"||s.position>=s.questions.length-1;$("nextQuestion").textContent=s.position<0?"Starta första frågan":"Avsluta frågan och gå vidare direkt";$("finishGame").disabled=s.status==="finished";renderResults(s);const container=$("hostQuestion");container.replaceChildren();if(s.position>=0){const q=s.questions[s.position];if(q.image&&/^https:\/\//i.test(q.image)){const img=document.createElement("img");img.src=q.image;img.alt="Bild till quizfrågan";img.className="quiz-image";container.append(img)}make("h2","Fråga "+(s.position+1)+" av "+s.questions.length,container);make("div",q.text,container).className="question";const answers=make("div","",container);answers.className="answers";q.answers.forEach((answer,i)=>make("button",answer,answers).disabled=true);const total=s.players.reduce((n,p)=>n+p.answers.filter(a=>a.position===s.position).length,0);make("p",total+" av "+s.players.length+" har svarat.",container);if(s.status==="finished")make("p","Rätt svar: "+q.answers[q.correct],container)}if(s.status==="finished")msg("Quizet är avslutat. Resultaten och diagrammen visas nedan.")};
 $("joinGame").onclick=async()=>{try{const result=await call("join",{pin:$("joinCode").value.trim(),nickname:$("nickname").value.trim()});studentToken=result.token;$("joinGame").disabled=true;$("studentGame").classList.remove("hidden");msg("Du är med! Vänta på läraren.");await refreshStudent()}catch(e){msg(e.message)}};
 async function refreshStudent(){if(!studentToken)return;studentState=await call("student",{token:studentToken});const s=studentState;$("studentScore").textContent="Poäng: "+s.score;const target=$("studentAnswers");if(s.position!==lastPosition){target.replaceChildren();$("answerFeedback").classList.add("hidden");lastPosition=s.position;if(s.question){if(s.question.image&&/^https:\/\//i.test(s.question.image)){const img=document.createElement("img");img.src=s.question.image;img.alt="Bild till frågan";img.className="quiz-image";target.append(img)}s.question.answers.forEach((a,i)=>{const b=make("button",a,target);b.onclick=async()=>{try{await call("answer",{token:studentToken,choice:i});await refreshStudent()}catch(e){msg(e.message)}}})}}$("studentHeading").textContent=s.status==="finished"?"Quizet är avslutat!":s.position<0?"Väntar på läraren …":s.question.text;if(s.answered||s.status==="finished"||(s.seconds>0&&s.started_at&&Date.now()>=new Date(s.started_at).getTime()+s.seconds*1000)){for(const b of target.querySelectorAll("button"))b.disabled=true;if(s.answered){const chosen=Number(s.selected_choice),correct=Number(s.correct_choice);for(const [i,b] of [...target.querySelectorAll("button")].entries()){b.classList.toggle("answer-correct",i===correct);b.classList.toggle("answer-wrong",i===chosen&&chosen!==correct)}const feedback=$("answerFeedback");feedback.textContent=Number.isInteger(correct)&&correct>=0&&correct<4?(chosen===correct?"✓ Rätt svar!":"✗ Inte riktigt. Rätt svar är "+String.fromCharCode(65+correct)+"."):"Svar registrerat.";feedback.classList.remove("hidden");feedback.classList.toggle("feedback-correct",chosen===correct);feedback.classList.toggle("feedback-wrong",chosen!==correct);if(s.status!=="finished")msg("Svar registrerat. Vänta på nästa fråga.")}else{$("answerFeedback").classList.add("hidden")}}else if(s.position>=0)msg("Välj ett svar.")};
 function secondsRemaining(state){if(!state||state.position<0||!state.started_at)return null;const q=state.questions?.[state.position];const limit=state.seconds??q?.seconds??30;if(!limit)return null;return Math.max(0,Math.ceil((new Date(state.started_at).getTime()+limit*1000-Date.now())/1000))}
