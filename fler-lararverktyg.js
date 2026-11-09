@@ -343,4 +343,3 @@ async function showShared(){
  for(const el of [search,subject,grade,type])el.addEventListener(el===search?"input":"change",renderItems);
  renderItems();$("editor").scrollIntoView({behavior:"smooth"});
 }
-\n
