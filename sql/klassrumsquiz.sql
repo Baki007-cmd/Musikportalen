@@ -17,9 +17,10 @@ create table if not exists public.classroom_quiz_answers (
  quiz_id uuid not null references public.classroom_quizzes(id) on delete cascade,
  player_id uuid not null references public.classroom_quiz_players(id) on delete cascade,
  position int not null, choice int not null check(choice between 0 and 3),
- created_at timestamptz not null default now(), primary key(quiz_id,player_id,position)
+ created_at timestamptz not null default now(), question_started_at timestamptz, primary key(quiz_id,player_id,position)
 );
 alter table public.classroom_quizzes add column if not exists question_started_at timestamptz;
+alter table public.classroom_quiz_answers add column if not exists question_started_at timestamptz;
 alter table public.classroom_quizzes enable row level security;
 alter table public.classroom_quiz_players enable row level security;
 alter table public.classroom_quiz_answers enable row level security;
@@ -51,8 +52,11 @@ begin
    update public.classroom_quizzes set status='finished' where id=q.id returning * into q;
   end if;
   select coalesce(jsonb_agg(jsonb_build_object('nickname',p.nickname,'score',(
-   select count(*) from public.classroom_quiz_answers a
-   where a.player_id=p.id and a.choice=(q.questions->a.position->>'correct')::int
+   select coalesce(sum(case when a.choice=(q.questions->a.position->>'correct')::int then
+    case when coalesce((q.questions->a.position->>'seconds')::int,30)=0 then 1000
+    when a.question_started_at is null then 200
+    else greatest(200,1000-floor(800*greatest(0,extract(epoch from (a.created_at-a.question_started_at)))/greatest(1,coalesce((q.questions->a.position->>'seconds')::int,30))))::int end
+    else 0 end),0) from public.classroom_quiz_answers a where a.player_id=p.id
   ),'answers',(select coalesce(jsonb_agg(jsonb_build_object('position',a.position,'choice',a.choice)),'[]'::jsonb) from public.classroom_quiz_answers a where a.player_id=p.id)) order by p.joined_at),'[]'::jsonb)
   into v_rows from public.classroom_quiz_players p where p.quiz_id=q.id;
   return jsonb_build_object('pin',q.pin,'title',q.title,'position',q.position,'status',q.status,'questions',q.questions,'started_at',q.question_started_at,'players',v_rows);
@@ -74,11 +78,14 @@ begin
    if coalesce((q.questions->q.position->>'seconds')::int,30)>0 and now()>q.question_started_at+make_interval(secs=>coalesce((q.questions->q.position->>'seconds')::int,30)) then raise exception 'Svarstiden har gått ut'; end if;
    v_choice=(p_data->>'choice')::int;
    if v_choice not between 0 and 3 then raise exception 'Ogiltigt svar'; end if;
-   insert into public.classroom_quiz_answers(quiz_id,player_id,position,choice) values(q.id,pl.id,q.position,v_choice)
+   insert into public.classroom_quiz_answers(quiz_id,player_id,position,choice,question_started_at) values(q.id,pl.id,q.position,v_choice,q.question_started_at)
    on conflict do nothing;
   end if;
-  select count(*) into v_score from public.classroom_quiz_answers a
-  where a.player_id=pl.id and a.choice=(q.questions->a.position->>'correct')::int;
+  select coalesce(sum(case when a.choice=(q.questions->a.position->>'correct')::int then
+    case when coalesce((q.questions->a.position->>'seconds')::int,30)=0 then 1000
+    when a.question_started_at is null then 200
+    else greatest(200,1000-floor(800*greatest(0,extract(epoch from (a.created_at-a.question_started_at)))/greatest(1,coalesce((q.questions->a.position->>'seconds')::int,30))))::int end
+    else 0 end),0) into v_score from public.classroom_quiz_answers a where a.player_id=pl.id;
   v_question=case when q.position>=0 then q.questions->q.position else null end;
   if v_question is not null then v_question=jsonb_build_object('text',v_question->>'text','answers',v_question->'answers','image',v_question->>'image'); end if;
   return jsonb_build_object('status',q.status,'position',q.position,'question',v_question,'started_at',q.question_started_at,'seconds',coalesce((q.questions->q.position->>'seconds')::int,30),'score',v_score,
