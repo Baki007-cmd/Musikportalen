@@ -8,6 +8,30 @@ let qrPin="";function renderJoinQr(pin){if(!/^\d{6}$/.test(String(pin))||qrPin==
 for(let i=0;i<4;i++){const label=make("label","Svarsalternativ "+(i+1),$("answerInputs"));const input=document.createElement("input");input.id="answer"+i;input.maxLength=160;input.required=true;label.append(input)}
 $("teacherMode").onclick=async()=>{try{client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user)throw Error("Logga in som lärare först.");const {data:profile}=await client.from("portal_users").select("role").eq("id",user.id).single();if(!["teacher","admin"].includes(profile?.role))throw Error("Du behöver godkänd lärarbehörighet.");show("teacher");msg("");refreshSavedQuizzes().catch(e=>msg(e.message))}catch(e){msg(e.message)}};
 $("studentMode").onclick=()=>{show("student");msg("")};
+async function uploadQuizImage(file){
+ if(!file)return "";
+ if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw Error("Välj en JPG-, PNG- eller WebP-bild.");
+ if(file.size>5*1024*1024)throw Error("Bilden får vara högst 5 MB.");
+ if(!client)client=await getMusikportalenSupabase();
+ const {data:{user}}=await client.auth.getUser();
+ if(!user)throw Error("Logga in som lärare för att bifoga bilder.");
+ const ext={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}[file.type];
+ const path=user.id+"/"+crypto.randomUUID()+"."+ext;
+ const {error}=await client.storage.from("classroom-quiz-images").upload(path,file,{contentType:file.type,upsert:false});
+ if(error)throw Error("Bilduppladdningen misslyckades. Kontrollera att lagringsytan classroom-quiz-images finns i Supabase. "+error.message);
+ return client.storage.from("classroom-quiz-images").getPublicUrl(path).data.publicUrl;
+}
+function addImageUpload(label,q){
+ const fileInput=document.createElement("input");fileInput.type="file";fileInput.accept="image/jpeg,image/png,image/webp";label.append(fileInput);
+ const status=document.createElement("small");label.append(status);
+ fileInput.onchange=async()=>{
+  const file=fileInput.files?.[0];if(!file)return;
+  fileInput.disabled=true;status.textContent="Laddar upp bild …";
+  try{q.image=await uploadQuizImage(file);const url=label.querySelector('input[type="url"]');if(url)url.value=q.image;status.textContent="Bilden är bifogad och sparas med frågan.";msg("Bilden har laddats upp.");}
+  catch(e){status.textContent=e.message;msg(e.message)}
+  finally{fileInput.disabled=false;fileInput.value=""}
+ };
+}
 function renderQuestionList(){
  const list=$("questionList");list.replaceChildren();
  $("questionCount").textContent=questions.length+" frågor tillagda";
@@ -28,7 +52,7 @@ function renderQuestionList(){
   for(let i=0;i<4;i++){const option=document.createElement("option");option.value=String(i);option.textContent="Alternativ "+String.fromCharCode(65+i);correctSelect.append(option)}
   correctSelect.value=String(q.correct);correctSelect.onchange=()=>{q.correct=Number(correctSelect.value)};correctLabel.append(correctSelect);
   const imageLabel=make("label","Bildadress (valfritt)",li);
-  const imageInput=document.createElement("input");imageInput.type="url";imageInput.placeholder="https://";imageInput.value=q.image||"";imageInput.oninput=()=>{q.image=imageInput.value.trim()};imageLabel.append(imageInput);
+  const imageInput=document.createElement("input");imageInput.type="url";imageInput.placeholder="https://";imageInput.value=q.image||"";imageInput.oninput=()=>{q.image=imageInput.value.trim()};imageLabel.append(imageInput);addImageUpload(imageLabel,q);
   const timeLabel=make("label","Tidsgräns",li);const timeSelect=document.createElement("select");
   for(const seconds of [15,30,60,0]){const option=document.createElement("option");option.value=String(seconds);option.textContent=seconds?seconds+" sekunder":"Ingen tidsgräns";timeSelect.append(option)}
   timeSelect.value=String(q.seconds??30);timeSelect.onchange=()=>{q.seconds=Number(timeSelect.value)};timeLabel.append(timeSelect);
@@ -47,15 +71,17 @@ function validateQuestions(){
  }
  return "";
 }
-$("addQuestion").onclick=()=>{
+$("addQuestion").onclick=async()=>{
  const text=$("questionText").value.trim(),answers=[0,1,2,3].map(i=>$("answer"+i).value.trim()),correct=Number($("correct").value);
  if(text.length<3||answers.some(a=>!a)){msg("Fyll i frågan och alla fyra svarsalternativ.");return}
  if(questions.length>=30){msg("Högst 30 frågor.");return}
- const image=$("questionImage").value.trim();
+ let image=$("questionImage").value.trim();
  if(image&&!/^https:\/\//i.test(image)){msg("Bildadressen måste börja med https://");return}
+ const file=$("questionImageFile")?.files?.[0];
+ if(file){$("addQuestion").disabled=true;$("questionImageStatus").textContent="Laddar upp bild …";try{image=await uploadQuizImage(file)}catch(e){msg(e.message);$("questionImageStatus").textContent=e.message;return}finally{$("addQuestion").disabled=false}}
  const seconds=Number($("questionTime").value);
  questions.push({text,answers,correct,image,seconds});
- $("questionImage").value="";$("questionText").value="";
+ $("questionImage").value="";$("questionImageFile").value="";$("questionImageStatus").textContent="";$("questionText").value="";
  for(let i=0;i<4;i++)$("answer"+i).value="";
  renderQuestionList();msg("Frågan är tillagd. Du kan redigera alla alternativ nedan.");
 };
