@@ -123,9 +123,38 @@ $("addQuestion").onclick=async()=>{
 $("startGame").onclick=async()=>{const validation=validateQuestions();if(validation){msg(validation);return}try{const result=await call("create",{title:$("quizTitle").value.trim(),subject:$("quizSubject").value.trim(),grade:Number($("quizGrade").value),questions});hostId=result.id;show("host");$("pin").textContent=result.pin;await refreshHost();msg("Spel skapat. Visa koden på tavlan.")}catch(e){msg(e.message)}};
 $("nextQuestion").onclick=async()=>{if(autoAdvanceBusy)return;autoAdvanceBusy=true;try{const state=await call("host",{id:hostId});if(state.status==="finished")return;if(state.position>=state.questions.length-1)await call("finish",{id:hostId});else await call("advance",{id:hostId});}catch(e){msg(e.message)}finally{autoAdvanceBusy=false;await refreshHost()}};
 $("finishGame").onclick=async()=>{if(!confirm("Avsluta quizet och visa resultat?"))return;try{await call("finish",{id:hostId});await refreshHost()}catch(e){msg(e.message)}};
+let ceremonyRanking=[],ceremonyIndex=0,ceremonyHostId=null;
+function showCeremony(){
+ if(!hostState||hostState.status!=="finished")return;
+ ceremonyRanking=[...(hostState.players||[])].sort((a,b)=>Number(b.score||0)-Number(a.score||0)).slice(0,3);
+ ceremonyIndex=0;ceremonyHostId=hostId;
+ $("ceremonyStage").replaceChildren();
+ $("ceremonyStatus").textContent="Nu ska vi hylla våra tre bästa deltagare! 🎉";
+ $("revealCeremony").disabled=!ceremonyRanking.length;
+ $("revealCeremony").textContent="Avslöja nästa placering";
+ $("ceremony").classList.remove("hidden");
+ stopQuizMusic();
+}
+$("startCeremony").onclick=showCeremony;
+$("closeCeremony").onclick=()=>$("ceremony").classList.add("hidden");
+$("revealCeremony").onclick=()=>{
+ if(ceremonyIndex>=ceremonyRanking.length)return;
+ const index=ceremonyRanking.length-1-ceremonyIndex;
+ const p=ceremonyRanking[index],place=index+1;
+ const medal=["🥇","🥈","🥉"][index];
+ const card=make("div","",$("ceremonyStage"));card.className="ceremony-winner";
+ make("div",medal,card).className="medal";
+ make("h3",place+":a plats",card);
+ make("strong",p.nickname,card);
+ make("small",p.score+" poäng",card);
+ $("ceremonyStatus").textContent=place===1?"🎊 Grattis till segern!": "Applåder för "+place+":e plats!";
+ ceremonyIndex++;
+ if(ceremonyIndex>=ceremonyRanking.length){$("revealCeremony").textContent="🎉 Prisutdelningen är klar";$("revealCeremony").disabled=true}
+ else $("revealCeremony").textContent="Avslöja nästa placering";
+};
 function renderResults(state){
- const panel=$("quizResults");if(state.status!=="finished"){panel.classList.add("hidden");return}
- panel.classList.remove("hidden");panel.replaceChildren();
+ const panel=$("quizResults");if(state.status!=="finished"){panel.classList.add("hidden");$("startCeremony").classList.add("hidden");return}
+ panel.classList.remove("hidden");panel.replaceChildren();$("startCeremony").classList.remove("hidden");
  make("h2","Resultat för "+state.title,panel);
  const players=state.players||[],qs=state.questions||[];
  const total=players.length*qs.length;
