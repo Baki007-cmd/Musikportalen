@@ -216,12 +216,25 @@ function setEditMode(enabled){
 $("editMode").addEventListener("click",()=>setEditMode(!document.body.classList.contains("editing")));
 setEditMode(false);
 
+const floatingQuiet=$("floatingQuiet"),quietDrag=$("quietDrag"),quietResize=$("quietResize");
+const quietGeometryKey="musikportalen-floating-quiet-geometry";
+function positionQuiet(x,y){const w=floatingQuiet.offsetWidth,h=floatingQuiet.offsetHeight;floatingQuiet.style.left=clamp(x,0,Math.max(0,innerWidth-w))+"px";floatingQuiet.style.top=clamp(y,0,Math.max(0,innerHeight-h))+"px";}
+function saveQuietGeometry(){try{localStorage.setItem(quietGeometryKey,JSON.stringify({x:floatingQuiet.offsetLeft,y:floatingQuiet.offsetTop,w:floatingQuiet.offsetWidth}));}catch{}}
+try{const p=JSON.parse(localStorage.getItem(quietGeometryKey)||"null");if(p){if(Number.isFinite(p.w))floatingQuiet.style.width=clamp(p.w,95,310)+"px";if(Number.isFinite(p.x)&&Number.isFinite(p.y))positionQuiet(p.x,p.y);}}catch{}
+let quietGesture=null;
+for(const [handle,kind] of [[quietDrag,"move"],[quietResize,"resize"]]){
+ handle.addEventListener("pointerdown",e=>{if(e.pointerType==="mouse"&&e.button!==0)return;e.preventDefault();const rect=floatingQuiet.getBoundingClientRect();quietGesture={id:e.pointerId,kind,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top,w:rect.width};handle.setPointerCapture(e.pointerId);});
+ handle.addEventListener("pointermove",e=>{if(!quietGesture||quietGesture.id!==e.pointerId||quietGesture.kind!==kind)return;if(kind==="move")positionQuiet(quietGesture.left+e.clientX-quietGesture.x,quietGesture.top+e.clientY-quietGesture.y);else{floatingQuiet.style.width=clamp(quietGesture.w+e.clientX-quietGesture.x,95,310)+"px";positionQuiet(floatingQuiet.offsetLeft,floatingQuiet.offsetTop);}});
+ const finish=e=>{if(quietGesture?.id!==e.pointerId)return;quietGesture=null;saveQuietGeometry();};
+ handle.addEventListener("pointerup",finish);handle.addEventListener("pointercancel",finish);
+}
+window.addEventListener("resize",()=>positionQuiet(floatingQuiet.offsetLeft,floatingQuiet.offsetTop));
 const extraIds=["timer","quiet","metronome"];
 const extrasKey="musikportalen-visible-extras";
-function getVisibleExtras(){return extraIds.filter(id=>!tiles.querySelector('[data-tile="'+id+'"]').hidden);}
+function getVisibleExtras(){return extraIds.filter(id=>id==="quiet"?!floatingQuiet.hidden:!tiles.querySelector('[data-tile="'+id+'"]').hidden);}
 function setVisibleExtras(ids){
  const selected=Array.isArray(ids)?ids:[];
- for(const id of extraIds)tiles.querySelector('[data-tile="'+id+'"]').hidden=!selected.includes(id);
+ for(const id of extraIds){if(id==="quiet")floatingQuiet.hidden=!selected.includes(id);else tiles.querySelector('[data-tile="'+id+'"]').hidden=!selected.includes(id);}
  try{localStorage.setItem(extrasKey,JSON.stringify(getVisibleExtras()));}catch{}
  document.querySelectorAll(".extra-toggle").forEach(button=>button.setAttribute("aria-pressed",String(selected.includes(button.dataset.extra))));
  $("hideExtras").hidden=getVisibleExtras().length===0;
