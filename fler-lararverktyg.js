@@ -184,7 +184,7 @@ function setupSmartGenerator(){
   try{show(type,data);preview();$("generator").hidden=true;$("toast").textContent="Materialet är skapat och visas nedan. Du kan redigera fälten, uppdatera förhandsvisningen och sedan spara i dina mallar.";}catch(error){$("generatorStatus").textContent="Det gick inte att skapa materialet: "+error.message;}
  };
 }
-setupSmartGenerator();
+// Materialgeneratorn startas efter godkänd behörighetskontroll.
 document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>show(b.dataset.open));
 $("toolSearch").oninput=()=>{const q=$("toolSearch").value.toLowerCase().trim();document.querySelectorAll(".tool").forEach(t=>t.hidden=!!q&&!t.textContent.toLowerCase().includes(q)&&!t.dataset.key.includes(q));};
 $("generate").onclick=preview;
@@ -311,7 +311,47 @@ $("savePrivate").onclick=saveToPrivateMaterialLibrary;
 
 $("print").onclick=()=>{preview();const old=document.title;document.title=(inputValues().title||"Lärarverktyget").replace(/[\\/:*?"<>|]/g,"-");window.print();document.title=old;};
 $("close").onclick=()=>{$("editor").hidden=true;current=null;};
-(async()=>{try{const client=await getMusikportalenSupabase();const {data:{user}}=await client.auth.getUser();if(!user){location.replace("login.html");return;}const {data:profile,error}=await client.from("portal_users").select("role").eq("id",user.id).single();if(error||!["teacher","admin"].includes(profile?.role)){$("authStatus").textContent="Du behöver godkänd lärarbehörighet för att använda verktygen.";return;}ownerKey=user.id;cloud=client;const {error:tableError}=await client.from("teacher_materials").select("id").limit(1);cloudReady=!tableError;$("authStatus").hidden=true;$("app").hidden=false;refreshSavedWeeks().catch(e=>{$("savedWeeks").textContent="Kunde inte läsa sparade veckor: "+e.message});if(cloudReady){const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';document.getElementById("tools").append(article);document.getElementById("sharedOpen").onclick=showShared;}else{$("authStatus").hidden=false;$("authStatus").textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";}}catch(e){$("authStatus").textContent="Kunde inte kontrollera inloggningen. Försök igen senare.";}})();
+// Behörighetskontrollen startar oberoende av verktygens övriga initiering.
+(async()=>{
+ const status=$("authStatus");
+ const withTimeout=(promise,label)=>Promise.race([
+  promise,
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+" tog för lång tid. Kontrollera anslutningen och försök ladda om sidan.")),12000))
+ ]);
+ try{
+  status.textContent="Ansluter till inloggningen …";
+  const client=await withTimeout(getMusikportalenSupabase(),"Anslutningen till Supabase");
+  status.textContent="Kontrollerar inloggning …";
+  const {data:{user},error:authError}=await withTimeout(client.auth.getUser(),"Inloggningskontrollen");
+  if(authError)throw authError;
+  if(!user){location.replace("login.html");return;}
+  status.textContent="Kontrollerar lärarbehörighet …";
+  const {data:profile,error}=await withTimeout(client.from("portal_users").select("role").eq("id",user.id).single(),"Behörighetskontrollen");
+  if(error){status.textContent="Det gick inte att läsa din lärarbehörighet: "+error.message;return;}
+  if(!["teacher","admin"].includes(profile?.role)){
+   status.textContent="Du behöver godkänd lärarbehörighet för att använda verktygen. Din nuvarande behörighet: "+(profile?.role||"saknas")+".";
+   return;
+  }
+  ownerKey=user.id;cloud=client;
+  status.hidden=true;$("app").hidden=false;
+  try{setupSmartGenerator()}catch(e){console.error("Materialgeneratorn kunde inte starta:",e);}
+  refreshSavedWeeks().catch(e=>{$("savedWeeks").textContent="Kunde inte läsa sparade veckor: "+e.message});
+  try{
+   const {error:tableError}=await withTimeout(client.from("teacher_materials").select("id").limit(1),"Kontroll av molnlagring");
+   cloudReady=!tableError;
+   if(cloudReady){
+    const article=document.createElement("article");article.className="tool";article.dataset.key="delade mallar materialbank kollegor";
+    article.innerHTML='<h2>Delade lärarmaterial</h2><p>Hitta material som andra lärare valt att dela.</p><button id="sharedOpen">Öppna materialbanken</button>';
+    $("tools").append(article);$("sharedOpen").onclick=showShared;
+   }else{
+    status.hidden=false;status.textContent="Molnlagring är ännu inte aktiverad. Material sparas lokalt tills databasinstallationen är klar.";
+   }
+  }catch(e){status.hidden=false;status.textContent="Molnlagring kunde inte kontrolleras. Verktygen kan användas med lokal lagring. "+e.message;}
+ }catch(e){
+  console.error("Behörighetskontroll misslyckades:",e);
+  status.hidden=false;status.textContent="Kunde inte kontrollera inloggningen: "+(e?.message||String(e))+" Ladda om sidan och försök igen.";
+ }
+})();
 
 async function showShared(){
  if(!cloudReady)return;
