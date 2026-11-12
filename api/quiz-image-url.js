@@ -25,7 +25,7 @@ module.exports=async function(req,res){
    }
   }
   if(!allowed&&typeof req.body?.studentToken==="string"&&req.body.studentToken.length<=256){
-   const response=await fetch(url+"/rest/v1/rpc/classroom_quiz_action",{method:"POST",headers:{"Content-Type":"application/json",apikey:key,Authorization:"Bearer "+key},body:JSON.stringify({p_action:"student",p_data:{token:req.body.studentToken}})});
+   const response=await fetch(url+"/rest/v1/rpc/classroom_quiz_action",{method:"POST",headers:{"Content-Type":"application/json",apikey:secret,Authorization:"Bearer "+secret},body:JSON.stringify({p_action:"student",p_data:{token:req.body.studentToken}})});
    if(response.ok){
     const state=await response.json();
     const current=state?.question?.image;
